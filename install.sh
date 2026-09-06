@@ -150,7 +150,9 @@ else
 
     step "افزودن مخزن PHP ${PHP_VERSION}"
 
-    if ! apt-cache policy "php${PHP_VERSION}-fpm" 2>/dev/null | grep -q Candidate:.*[0-9]; then
+    FPM_POLICY="$(apt-cache policy "php${PHP_VERSION}-fpm" 2>/dev/null || true)"
+
+    if ! grep -qE 'Candidate: *[0-9]' <<<"$FPM_POLICY"; then
         add-apt-repository -y ppa:ondrej/php >/dev/null
         apt-get update -qq
     fi
@@ -222,11 +224,26 @@ fi
 
 # این فهرست از ext-* های واقعی composer.lock درآمده، نه از عادت.
 # نبودِ pcntl یا posix باعث می‌شود Horizon بی‌سروصدا کار نکند.
+REQUIRED_EXTS="pdo_pgsql redis mbstring dom simplexml curl zip openssl tokenizer fileinfo pcntl posix"
+
+# عمداً «php -m | grep» نیست.
+#
+# با set -o pipefail، grep -q به‌محض پیدا کردنِ تطابق خارج می‌شود، لوله بسته
+# می‌شود، php سیگنال SIGPIPE می‌گیرد و با کد ناصفر تمام می‌کند — و pipefail کل
+# لوله را ناموفق می‌شمارد. نتیجه: افزونه‌ی سالم «نصب‌نشده» گزارش می‌شود، آن هم
+# به‌صورت اتفاقی و وابسته به سرعت ماشین. extension_loaded پاسخ قطعی می‌دهد و
+# اصلاً لوله‌ای در کار نیست.
 MISSING_EXTS=()
 
-for ext in pdo_pgsql redis mbstring dom simplexml curl zip openssl tokenizer fileinfo pcntl posix; do
-    "$PHP_BIN" -m | grep -qix "$ext" || MISSING_EXTS+=("$ext")
-done
+while IFS= read -r ext; do
+    [[ -n "$ext" ]] && MISSING_EXTS+=("$ext")
+done < <(REQUIRED_EXTS="$REQUIRED_EXTS" "$PHP_BIN" -r '
+    foreach (preg_split("/\s+/", trim((string) getenv("REQUIRED_EXTS"))) as $ext) {
+        if ($ext !== "" && ! extension_loaded($ext)) {
+            echo $ext, PHP_EOL;
+        }
+    }
+')
 
 if [[ ${#MISSING_EXTS[@]} -gt 0 ]]; then
     # پیام خالی «افزونه نصب نیست» بن‌بست است؛ هرچه برای تشخیص لازم است چاپ می‌شود.
@@ -234,6 +251,9 @@ if [[ ${#MISSING_EXTS[@]} -gt 0 ]]; then
     printf '  باینری:      %s (%s)\n' "$PHP_BIN" "$("$PHP_BIN" -v | head -1)" >&2
     printf '  php روی PATH: %s\n' "$(command -v php || echo '—')" >&2
     printf '  مسیر ini:    %s\n' "$("$PHP_BIN" --ini | grep -i 'scan.*for additional' | cut -d: -f2- | xargs || echo '—')" >&2
+    PHP_MODULES="$("$PHP_BIN" -m || true)"
+    printf '\n  افزونه‌های بارشده:\n' >&2
+    printf '%s\n' "$PHP_MODULES" | tr '\n' ' ' | fold -s -w 76 | sed 's/^/    /' >&2
     printf '\n  بسته‌های php%s نصب‌شده:\n' "$PHP_VERSION" >&2
     dpkg-query -W -f='    ${Package} ${Status}\n' "php${PHP_VERSION}-*" 2>/dev/null | grep 'install ok installed' | sed 's/ install ok installed//' >&2 || true
     FIX_PACKAGES=()
@@ -308,7 +328,9 @@ END
 \$\$;
 SQL
 
-if ! sudo -u postgres psql -tAc "SELECT 1 FROM pg_database WHERE datname='${DB_NAME}'" | grep -q 1; then
+DB_EXISTS="$(sudo -u postgres psql -tAc "SELECT 1 FROM pg_database WHERE datname='${DB_NAME}'" || true)"
+
+if [[ "$(tr -d '[:space:]' <<<"$DB_EXISTS")" != "1" ]]; then
     sudo -u postgres createdb -O "$DB_USER" "$DB_NAME"
     info "دیتابیس ${DB_NAME} ساخته شد."
 else
@@ -661,7 +683,9 @@ fi
 
 # --------------------------------------------------------------- فایروال
 
-if command -v ufw >/dev/null && ufw status 2>/dev/null | grep -q "Status: active"; then
+UFW_STATUS="$(command -v ufw >/dev/null && ufw status 2>/dev/null || true)"
+
+if grep -q "Status: active" <<<"$UFW_STATUS"; then
     step "تنظیم فایروال"
     ufw allow 'Nginx Full' >/dev/null
     info "پورت‌های ۸۰ و ۴۴۳ باز شدند. پورت ۸۰۸۰ (Reverb) عمداً بسته می‌ماند؛ از پشت Nginx سرو می‌شود."
