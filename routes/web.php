@@ -4,6 +4,7 @@ use App\Http\Controllers\Driver\AppointmentController;
 use App\Http\Controllers\Driver\BookingController;
 use App\Http\Controllers\Driver\OtpController;
 use App\Http\Controllers\Staff\DashboardController;
+use App\Http\Controllers\Staff\GateController;
 use App\Http\Controllers\Staff\HomeController;
 use App\Http\Controllers\Staff\LoginController;
 use App\Http\Controllers\Staff\QueueController;
@@ -67,6 +68,12 @@ Route::prefix('panel')->name('staff.')->group(function () {
         Route::post('/logout', [LoginController::class, 'destroy'])->name('logout');
 
         Route::get('/dashboard', DashboardController::class)->name('dashboard');
+
+        // نگهبانی / باسکول
+        Route::get('/gate', [GateController::class, 'index'])->name('gate.index');
+        Route::post('/gate/scan', [GateController::class, 'scan'])->name('gate.scan');
+        Route::post('/gate/lookup', [GateController::class, 'lookup'])->name('gate.lookup');
+        Route::post('/gate/{appointment}/check-in', [GateController::class, 'checkIn'])->name('gate.check-in');
 
         Route::get('/queue', [QueueController::class, 'index'])->name('queue.index');
         Route::get('/queue/{appointment}', [QueueController::class, 'show'])->name('queue.show');
