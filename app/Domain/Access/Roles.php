@@ -41,7 +41,7 @@ final class Roles
     public static function matrix(): array
     {
         $operator = [
-            P::QUEUE_VIEW, P::QUEUE_CALL, P::QUEUE_CHECKIN,
+            P::QUEUE_VIEW, P::QUEUE_MANAGE, P::QUEUE_CALL, P::QUEUE_CHECKIN,
             P::QUEUE_START_LOADING, P::QUEUE_COMPLETE_LOADING, P::QUEUE_NO_SHOW,
             P::APPOINTMENTS_VIEW, P::APPOINTMENTS_CANCEL, P::APPOINTMENTS_CREATE,
             P::DASHBOARD_VIEW,
@@ -51,7 +51,7 @@ final class Roles
             self::SUPER_ADMIN => Permissions::keys(),
 
             self::FACTORY_MANAGER => array_merge($operator, [
-                P::QUEUE_MANAGE, P::APPOINTMENTS_REJECT, P::APPOINTMENTS_ROLLBACK,
+                P::APPOINTMENTS_REJECT, P::APPOINTMENTS_ROLLBACK,
                 P::REPORTS_VIEW, P::SETTINGS_MANAGE, P::PRODUCTS_MANAGE,
                 P::USERS_MANAGE, P::AUDIT_VIEW, P::WEIGHING_RECORD,
             ]),

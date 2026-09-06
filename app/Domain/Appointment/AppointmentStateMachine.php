@@ -97,6 +97,8 @@ final class AppointmentStateMachine
         }
 
         return match ($to) {
+            // ورود به صف انتظار بخشی از اداره‌ی روزمره‌ی صف است
+            S::Waiting => 'queue.manage',
             S::Called => 'queue.call',
             S::CheckedIn => 'queue.checkin',
             S::Loading => 'queue.start-loading',

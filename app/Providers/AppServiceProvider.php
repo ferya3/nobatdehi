@@ -38,6 +38,12 @@ class AppServiceProvider extends ServiceProvider
             Limit::perHour(30)->by('ip:'.$request->ip()),
         ]);
 
+        // ورود کارکنان: هم روی ایمیل، هم روی IP
+        RateLimiter::for('staff-login', fn (Request $request) => [
+            Limit::perMinute(5)->by('email:'.$request->input('email')),
+            Limit::perMinute(20)->by('ip:'.$request->ip()),
+        ]);
+
         RateLimiter::for('booking', fn (Request $request) => [
             Limit::perMinute(10)->by('driver:'.($request->user('driver')?->id ?? $request->ip())),
         ]);

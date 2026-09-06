@@ -3,6 +3,10 @@
 use App\Http\Controllers\Driver\AppointmentController;
 use App\Http\Controllers\Driver\BookingController;
 use App\Http\Controllers\Driver\OtpController;
+use App\Http\Controllers\Staff\DashboardController;
+use App\Http\Controllers\Staff\HomeController;
+use App\Http\Controllers\Staff\LoginController;
+use App\Http\Controllers\Staff\QueueController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -41,6 +45,33 @@ Route::prefix('queue')->name('driver.')->group(function () {
             ->name('appointments.cancel');
 
         Route::post('/logout', [OtpController::class, 'logout'])->name('logout');
+    });
+});
+
+/*
+|--------------------------------------------------------------------------
+| پنل کارکنان کارخانه
+|--------------------------------------------------------------------------
+*/
+
+Route::prefix('panel')->name('staff.')->group(function () {
+    Route::middleware('guest:web')->group(function () {
+        Route::get('/login', [LoginController::class, 'show'])->name('login');
+        Route::post('/login', [LoginController::class, 'store'])
+            ->middleware('throttle:staff-login')
+            ->name('login.store');
+    });
+
+    Route::middleware('auth:web')->group(function () {
+        Route::get('/', HomeController::class)->name('home');
+        Route::post('/logout', [LoginController::class, 'destroy'])->name('logout');
+
+        Route::get('/dashboard', DashboardController::class)->name('dashboard');
+
+        Route::get('/queue', [QueueController::class, 'index'])->name('queue.index');
+        Route::get('/queue/{appointment}', [QueueController::class, 'show'])->name('queue.show');
+        Route::post('/queue/{appointment}/transition', [QueueController::class, 'transition'])
+            ->name('queue.transition');
     });
 });
 

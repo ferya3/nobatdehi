@@ -47,7 +47,7 @@ final class Permissions
             self::QUEUE_START_LOADING => 'شروع بارگیری',
             self::QUEUE_COMPLETE_LOADING => 'پایان بارگیری',
             self::QUEUE_NO_SHOW => 'ثبت عدم حضور',
-            self::QUEUE_MANAGE => 'مدیریت کامل صف',
+            self::QUEUE_MANAGE => 'اداره صف (تغییر ترتیب و وضعیت پایه)',
 
             self::APPOINTMENTS_VIEW => 'مشاهده نوبت‌ها',
             self::APPOINTMENTS_CREATE => 'ثبت نوبت به‌جای راننده',

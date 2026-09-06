@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Middleware;
 
+use App\Domain\Access\Roles;
 use App\Models\Driver;
 use App\Models\Factory;
 use App\Models\User;
@@ -36,7 +37,9 @@ class HandleInertiaRequests extends Middleware
                     'id' => $user->id,
                     'name' => $user->name,
                     'email' => $user->email,
-                    'roles' => $user->getRoleNames(),
+                    'roles' => $user->getRoleNames()->map(
+                        fn (string $role) => Roles::labels()[$role] ?? $role
+                    )->values(),
                     'permissions' => $user->getAllPermissions()->pluck('name'),
                 ] : null,
                 'driver' => $driver ? [
