@@ -1,0 +1,54 @@
+@import 'tailwindcss';
+@import 'vazirmatn/Vazirmatn-Variable-font-face.css';
+
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../storage/framework/views/*.php';
+
+@theme {
+    --font-sans: 'Vazirmatn', ui-sans-serif, system-ui, 'Segoe UI', sans-serif;
+    --font-mono: ui-monospace, 'SFMono-Regular', 'Menlo', monospace;
+
+    /* برند: آبی-فیروزه‌ای آرام و صنعتی */
+    --color-brand-50: #f0f8fa;
+    --color-brand-100: #daedf2;
+    --color-brand-200: #b9dbe6;
+    --color-brand-300: #8ac0d4;
+    --color-brand-400: #549dba;
+    --color-brand-500: #3781a1;
+    --color-brand-600: #2f6885;
+    --color-brand-700: #2b566d;
+    --color-brand-800: #29485b;
+    --color-brand-900: #263d4d;
+    --color-brand-950: #142633;
+
+    /* رنگ وضعیت‌ها */
+    --color-state-booked: #64748b;
+    --color-state-waiting: #d97706;
+    --color-state-called: #2563eb;
+    --color-state-checkedin: #4f46e5;
+    --color-state-loading: #7c3aed;
+    --color-state-loaded: #059669;
+    --color-state-completed: #047857;
+    --color-state-failed: #e11d48;
+}
+
+@layer base {
+    html {
+        font-feature-settings: 'ss01', 'ss02';
+    }
+
+    body {
+        @apply bg-slate-50 text-slate-800 antialiased;
+    }
+
+    /* اعداد در فیلدهای عددی همیشه چپ‌چین و لاتین بمانند */
+    input[inputmode='numeric'],
+    input[type='tel'],
+    .tabular {
+        font-variant-numeric: tabular-nums;
+    }
+}
+
+@utility card {
+    @apply rounded-2xl border border-slate-200/80 bg-white shadow-sm;
+}
