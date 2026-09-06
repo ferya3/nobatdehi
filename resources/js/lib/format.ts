@@ -44,3 +44,17 @@ export function num(value: number | string | null | undefined): string {
     if (value === null || value === undefined || value === '') return '—';
     return Number(value).toLocaleString('en-US');
 }
+
+/** ۱۳۵ دقیقه → «۲ ساعت و ۱۵ دقیقه» */
+export function duration(minutes: number | null | undefined): string {
+    if (minutes === null || minutes === undefined) return '';
+
+    const total = Math.max(0, Math.round(minutes));
+
+    if (total < 60) return `${total} دقیقه`;
+
+    const h = Math.floor(total / 60);
+    const m = total % 60;
+
+    return m === 0 ? `${h} ساعت` : `${h} ساعت و ${m} دقیقه`;
+}

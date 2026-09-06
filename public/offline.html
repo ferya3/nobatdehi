@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>اتصال برقرار نیست</title>
+    <style>
+        body {
+            margin: 0;
+            min-height: 100dvh;
+            display: grid;
+            place-items: center;
+            padding: 24px;
+            background: #f8fafc;
+            color: #1e293b;
+            font-family: Vazirmatn, system-ui, sans-serif;
+            text-align: center;
+        }
+        .box { max-width: 24rem; }
+        h1 { font-size: 1.125rem; margin: 0 0 8px; }
+        p { margin: 0 0 20px; color: #64748b; font-size: 0.9rem; line-height: 1.8; }
+        button {
+            border: 0;
+            border-radius: 12px;
+            background: #2f6885;
+            color: #fff;
+            padding: 12px 24px;
+            font: inherit;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="box">
+        <h1>اتصال اینترنت برقرار نیست</h1>
+        <p>
+            برای دیدن وضعیت نوبت به اینترنت نیاز است. وضعیت صف لحظه‌ای تغییر می‌کند و
+            نمایش اطلاعات قدیمی می‌تواند گمراه‌کننده باشد.
+        </p>
+        <button onclick="location.reload()">تلاش دوباره</button>
+    </div>
+</body>
+</html>

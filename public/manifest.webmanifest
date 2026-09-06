@@ -1,0 +1,18 @@
+{
+    "name": "نوبت بارگیری",
+    "short_name": "نوبت بارگیری",
+    "description": "سامانه نوبت‌دهی بارگیری کامیون",
+    "start_url": "/queue",
+    "scope": "/queue",
+    "display": "standalone",
+    "orientation": "portrait",
+    "lang": "fa",
+    "dir": "rtl",
+    "background_color": "#f8fafc",
+    "theme_color": "#2f6885",
+    "icons": [
+        { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+        { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+        { "src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    ]
+}

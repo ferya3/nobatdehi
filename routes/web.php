@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Controllers\Driver\AppointmentController;
+use App\Http\Controllers\Driver\BookingController;
 use App\Http\Controllers\Driver\OtpController;
 use Illuminate\Support\Facades\Route;
 
@@ -26,7 +28,18 @@ Route::prefix('queue')->name('driver.')->group(function () {
     });
 
     Route::middleware('auth:driver')->group(function () {
-        Route::get('/', fn () => inertia('Driver/Home'))->name('home');
+        Route::get('/', [AppointmentController::class, 'home'])->name('home');
+
+        Route::get('/book', [BookingController::class, 'create'])->name('booking.create');
+        Route::post('/book', [BookingController::class, 'store'])
+            ->middleware('throttle:booking')
+            ->name('booking.store');
+
+        Route::get('/appointments/{appointment}', [AppointmentController::class, 'show'])
+            ->name('appointments.show');
+        Route::post('/appointments/{appointment}/cancel', [AppointmentController::class, 'cancel'])
+            ->name('appointments.cancel');
+
         Route::post('/logout', [OtpController::class, 'logout'])->name('logout');
     });
 });

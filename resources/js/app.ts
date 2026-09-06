@@ -29,3 +29,12 @@ createInertiaApp({
         showSpinner: false,
     },
 });
+
+// ثبت Service Worker پنل راننده (فقط در production و روی اتصال امن)
+if ('serviceWorker' in navigator && import.meta.env.PROD) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {
+            // ثبت نشدن SW نباید برنامه را از کار بیندازد
+        });
+    });
+}

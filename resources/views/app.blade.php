@@ -9,6 +9,10 @@
     <title inertia>{{ config('app.name') }}</title>
 
     <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="manifest" href="/manifest.webmanifest">
+    <link rel="apple-touch-icon" href="/icons/icon-192.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="نوبت بارگیری">
 
     @routes
     @vite(['resources/css/app.css', 'resources/js/app.ts'])

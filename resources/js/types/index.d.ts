@@ -34,3 +34,69 @@ export interface PageProps {
     errors: Record<string, string>;
     [key: string]: unknown;
 }
+
+export interface PlateParts {
+    two: string;
+    letter: string;
+    three: string;
+    iran: string;
+    key: string;
+    short: string;
+    full: string;
+}
+
+export type StatusTone =
+    | 'booked'
+    | 'waiting'
+    | 'called'
+    | 'checkedin'
+    | 'loading'
+    | 'loaded'
+    | 'completed'
+    | 'failed';
+
+export interface Appointment {
+    ulid: string;
+    number: number;
+    status: string;
+    status_label: string;
+    status_tone: StatusTone;
+    is_active: boolean;
+    date: string;
+    jalali_date: string;
+    jalali_long: string;
+    time: string;
+    end_time: string;
+    product?: { id: number; name: string; load_tons: string | null };
+    truck?: { id: number; plate: PlateParts; type: string | null };
+    driver?: { id: number; name: string | null; mobile: string };
+    loading_point?: string | null;
+    checked_in_at: string | null;
+    called_at: string | null;
+    loading_started_at: string | null;
+    completed_at: string | null;
+    cancel_reason: string | null;
+    created_at: string | null;
+    is_today?: boolean;
+    ahead?: number | null;
+    eta_minutes?: number | null;
+}
+
+export interface SlotOption {
+    id: number;
+    start_time: string;
+    end_time: string;
+    capacity: number;
+    reserved: number;
+    remaining: number;
+    selectable: boolean;
+}
+
+export interface DayOption {
+    date: string;
+    jalali: string;
+    jalali_label: string;
+    is_today: boolean;
+    is_open: boolean;
+    remaining: number;
+}
