@@ -188,21 +188,72 @@ fi
 
 step "بررسی پیش‌نیازهای اجرا"
 
-for binary in php composer node npm nginx psql redis-cli; do
+for binary in composer node npm nginx psql redis-cli; do
     command -v "$binary" >/dev/null || die "«${binary}» پیدا نشد. بدون --skip-packages اجرا کنید یا خودتان نصبش کنید."
 done
+
+# مسیر باینری را صریح می‌گیریم، نه از PATH.
+#
+# روی سروری که از قبل PHP دیگری دارد (پنل میزبانی، نصب دستی، نسخه‌ی قدیمی‌تر)،
+# «php» ممکن است به همان اشاره کند و افزونه‌های php8.4-* اصلاً در آن نباشند —
+# آن‌وقت بررسی زیر روی باینری اشتباه انجام می‌شود.
+if [[ -x "/usr/bin/php${PHP_VERSION}" ]]; then
+    PHP_BIN="/usr/bin/php${PHP_VERSION}"
+elif command -v php >/dev/null; then
+    PHP_BIN="$(command -v php)"
+    warn "php${PHP_VERSION} در /usr/bin پیدا نشد؛ از ${PHP_BIN} استفاده می‌شود."
+else
+    die "PHP پیدا نشد. بدون --skip-packages اجرا کنید یا خودتان نصبش کنید."
+fi
 
 # nginx بدون FPM نمی‌تواند PHP را سرو کند؛ بهتر است همین‌جا بفهمیم تا وسط کار.
 [[ -d "/etc/php/${PHP_VERSION}/fpm" ]] || die "php${PHP_VERSION}-fpm نصب نیست. بدون --skip-packages اجرا کنید، یا خودتان نصبش کنید."
 
-INSTALLED_PHP="$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;')"
+INSTALLED_PHP="$("$PHP_BIN" -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;')"
 [[ "$INSTALLED_PHP" == "$PHP_VERSION" ]] || warn "PHP نصب‌شده ${INSTALLED_PHP} است، نه ${PHP_VERSION}."
+
+# روی Debian/Ubuntu گاهی ماژول نصب می‌شود ولی برای یک SAPI فعال نمی‌شود.
+# phpenmod این را idempotent درست می‌کند و اگر ماژول اصلاً نصب نباشد بی‌اثر است.
+if command -v phpenmod >/dev/null; then
+    for mod in pdo_pgsql pgsql redis mbstring dom simplexml curl zip opcache; do
+        phpenmod -v "$PHP_VERSION" "$mod" 2>/dev/null || true
+    done
+fi
 
 # این فهرست از ext-* های واقعی composer.lock درآمده، نه از عادت.
 # نبودِ pcntl یا posix باعث می‌شود Horizon بی‌سروصدا کار نکند.
+MISSING_EXTS=()
+
 for ext in pdo_pgsql redis mbstring dom simplexml curl zip openssl tokenizer fileinfo pcntl posix; do
-    php -m | grep -qix "$ext" || die "افزونه‌ی PHP «${ext}» نصب نیست."
+    "$PHP_BIN" -m | grep -qix "$ext" || MISSING_EXTS+=("$ext")
 done
+
+if [[ ${#MISSING_EXTS[@]} -gt 0 ]]; then
+    # پیام خالی «افزونه نصب نیست» بن‌بست است؛ هرچه برای تشخیص لازم است چاپ می‌شود.
+    printf '\n%sافزونه‌های PHP زیر بار نمی‌شوند: %s%s\n\n' "$RED" "${MISSING_EXTS[*]}" "$RESET" >&2
+    printf '  باینری:      %s (%s)\n' "$PHP_BIN" "$("$PHP_BIN" -v | head -1)" >&2
+    printf '  php روی PATH: %s\n' "$(command -v php || echo '—')" >&2
+    printf '  مسیر ini:    %s\n' "$("$PHP_BIN" --ini | grep -i 'scan.*for additional' | cut -d: -f2- | xargs || echo '—')" >&2
+    printf '\n  بسته‌های php%s نصب‌شده:\n' "$PHP_VERSION" >&2
+    dpkg-query -W -f='    ${Package} ${Status}\n' "php${PHP_VERSION}-*" 2>/dev/null | grep 'install ok installed' | sed 's/ install ok installed//' >&2 || true
+    FIX_PACKAGES=()
+    for ext in "${MISSING_EXTS[@]}"; do
+        case "$ext" in
+            pdo_pgsql) FIX_PACKAGES+=("php${PHP_VERSION}-pgsql") ;;
+            redis|mbstring|curl|zip) FIX_PACKAGES+=("php${PHP_VERSION}-${ext}") ;;
+            dom|simplexml) FIX_PACKAGES+=("php${PHP_VERSION}-xml") ;;
+            pcntl|posix|openssl|tokenizer|fileinfo) FIX_PACKAGES+=("php${PHP_VERSION}-cli") ;;
+        esac
+    done
+
+    if [[ ${#FIX_PACKAGES[@]} -gt 0 ]]; then
+        # تکراری‌ها را جمع می‌کنیم
+        readarray -t FIX_PACKAGES < <(printf '%s\n' "${FIX_PACKAGES[@]}" | sort -u)
+        printf '\n  رفع احتمالی:\n    sudo apt-get install --reinstall -y %s\n' "${FIX_PACKAGES[*]}" >&2
+    fi
+    printf '\n' >&2
+    die "بدون این افزونه‌ها برنامه اجرا نمی‌شود."
+fi
 
 # ------------------------------------------------------------ کاربر و کد
 
@@ -359,7 +410,7 @@ step "نصب وابستگی‌های PHP"
 as_app "COMPOSER_ALLOW_SUPERUSER=0 composer install --no-interaction --no-dev --prefer-dist --optimize-autoloader --quiet"
 
 if ! grep -qE '^APP_KEY=.+' "$APP_DIR/.env"; then
-    as_app "php artisan key:generate --force --quiet"
+    as_app "$PHP_BIN artisan key:generate --force --quiet"
     info "APP_KEY ساخته شد."
 fi
 
@@ -368,17 +419,17 @@ as_app "npm ci --no-fund --no-audit --silent"
 as_app "npm run build --silent"
 
 step "اجرای مهاجرت‌ها و داده‌های پایه"
-as_app "php artisan migrate --force --no-interaction"
-as_app "php artisan db:seed --force --no-interaction"
-as_app "php artisan slots:generate"
+as_app "$PHP_BIN artisan migrate --force --no-interaction"
+as_app "$PHP_BIN artisan db:seed --force --no-interaction"
+as_app "$PHP_BIN artisan slots:generate"
 
 if [[ "$SEED_DEMO" == "yes" ]]; then
-    as_app "php artisan db:seed --class=DemoQueueSeeder --force --no-interaction"
+    as_app "$PHP_BIN artisan db:seed --class=DemoQueueSeeder --force --no-interaction"
 fi
 
 step "بهینه‌سازی و دسترسی فایل‌ها"
-[[ -e "$APP_DIR/public/storage" ]] || as_app "php artisan storage:link"
-as_app "php artisan config:cache && php artisan route:cache && php artisan view:cache"
+[[ -e "$APP_DIR/public/storage" ]] || as_app "$PHP_BIN artisan storage:link"
+as_app "$PHP_BIN artisan config:cache && $PHP_BIN artisan route:cache && $PHP_BIN artisan view:cache"
 
 chown -R "$APP_USER:www-data" "$APP_DIR/storage" "$APP_DIR/bootstrap/cache"
 chmod -R ug+rwX "$APP_DIR/storage" "$APP_DIR/bootstrap/cache"
@@ -401,7 +452,7 @@ After=network.target redis-server.service
 Type=simple
 User=${APP_USER}
 WorkingDirectory=${APP_DIR}
-ExecStart=/usr/bin/php artisan reverb:start
+ExecStart=${PHP_BIN} artisan reverb:start
 Restart=always
 RestartSec=3
 
@@ -422,9 +473,9 @@ After=network.target redis-server.service postgresql.service
 Type=simple
 User=${APP_USER}
 WorkingDirectory=${APP_DIR}
-ExecStart=/usr/bin/php artisan horizon
+ExecStart=${PHP_BIN} artisan horizon
 # ترمینیت به Horizon می‌گوید کار جاری را تمام کند و بعد خارج شود
-ExecStop=/usr/bin/php artisan horizon:terminate
+ExecStop=${PHP_BIN} artisan horizon:terminate
 Restart=always
 RestartSec=3
 
@@ -445,7 +496,7 @@ After=network.target
 Type=oneshot
 User=${APP_USER}
 WorkingDirectory=${APP_DIR}
-ExecStart=/usr/bin/php artisan schedule:run
+ExecStart=${PHP_BIN} artisan schedule:run
 UNIT
 
 cat > /etc/systemd/system/nobatdehi-scheduler.timer <<UNIT
@@ -604,7 +655,7 @@ if [[ "$ENABLE_TLS" != "no" && -n "$DOMAIN" ]]; then
         set_env VITE_REVERB_PORT 80
         set_env APP_URL "http://${DOMAIN}"
         as_app "npm run build --silent"
-        as_app "php artisan config:cache"
+        as_app "$PHP_BIN artisan config:cache"
     fi
 fi
 
@@ -659,7 +710,7 @@ ${BOLD}${GREEN}نصب تمام شد.${RESET}
      KAVENEGAR_API_KEY را بگذارید، و شماره مدیران را در
      SMS_MANAGER_RECIPIENTS (با کاما جدا شده).
      تا وقتی SMS_PROVIDER=log است، پیامک‌ها فقط در لاگ نوشته می‌شوند.
-  2) بعد از هر تغییر .env:  sudo -u ${APP_USER} php ${APP_DIR}/artisan config:cache
+  2) بعد از هر تغییر .env:  sudo -u ${APP_USER} ${PHP_BIN} ${APP_DIR}/artisan config:cache
   3) پشتیبان‌گیری دیتابیس را تنظیم کنید — رمز دیتابیس در ${DB_PASSWORD_FILE}
 
   ${BOLD}سرویس‌ها${RESET}
