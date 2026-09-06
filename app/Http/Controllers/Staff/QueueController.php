@@ -42,6 +42,7 @@ class QueueController extends Controller
         $appointments = $this->queue->todayQueue($factory, $date);
 
         return Inertia::render('Staff/Queue/Index', [
+            'factoryId' => $factory->id,
             'date' => $date->toDateString(),
             'jalaliDate' => Jalali::long($date),
             'isToday' => $date->isToday(),

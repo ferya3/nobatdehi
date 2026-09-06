@@ -7,8 +7,9 @@ import StatusBadge from '@/components/StatusBadge.vue';
 import DriverLayout from '@/layouts/DriverLayout.vue';
 import type { Appointment, PageProps } from '@/types';
 import { duration } from '@/lib/format';
+import { useLiveChannel } from '@/lib/useLiveChannel';
 import { Link, router, usePage } from '@inertiajs/vue3';
-import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 
 const props = defineProps<{ appointment: Appointment; qr: { token: string } | null }>();
 
@@ -25,19 +26,37 @@ const canCancel = computed(
 const isCalled = computed(() => props.appointment.status === 'CALLED');
 
 /**
- * تازه‌سازی وضعیت.
- * فعلاً polling سبک روی همین صفحه است؛ در فاز بعد جای آن را WebSocket می‌گیرد
- * و این تایمر حذف می‌شود.
+ * وضعیت زنده.
+ *
+ * WebSocket مسیر اصلی است؛ polling پشتیبان است، چون راننده ممکن است روی
+ * شبکه‌ی موبایل ضعیف باشد و اتصال دائمی برقرار نشود. با اتصال زنده، فاصله‌ی
+ * polling بلند می‌شود تا مصرف داده‌ی راننده بی‌جهت بالا نرود.
  */
+const { connected } = useLiveChannel(props.appointment.is_active ? `appointment.${props.appointment.ulid}` : null, {
+    'appointment.status': () => refresh(),
+});
+
 let poller: ReturnType<typeof setInterval> | null = null;
 
 function refresh() {
     if (!props.appointment.is_active || document.hidden) return;
+
+    // فقط وضعیت را می‌گیریم؛ توکن QR نباید دوباره صادر شود
     router.reload({ only: ['appointment'] });
 }
 
+function schedule(intervalMs: number) {
+    if (poller) clearInterval(poller);
+
+    poller = setInterval(refresh, intervalMs);
+}
+
 onMounted(() => {
-    if (props.appointment.is_active) poller = setInterval(refresh, 30_000);
+    if (props.appointment.is_active) schedule(30_000);
+});
+
+watch(connected, (isLive) => {
+    if (props.appointment.is_active) schedule(isLive ? 180_000 : 30_000);
 });
 
 onUnmounted(() => {

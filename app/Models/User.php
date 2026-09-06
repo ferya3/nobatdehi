@@ -37,6 +37,14 @@ class User extends Authenticatable
         return $this->belongsTo(Factory::class);
     }
 
+    /**
+     * کاربر بدون کارخانه (مدیر ارشد سامانه) به همه‌ی کارخانه‌ها دسترسی دارد.
+     */
+    public function belongsToFactory(int $factoryId): bool
+    {
+        return $this->factory_id === null || $this->factory_id === $factoryId;
+    }
+
     public function setMobileAttribute(?string $value): void
     {
         $this->attributes['mobile'] = $value ? (Mobile::normalize($value) ?? $value) : null;

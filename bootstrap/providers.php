@@ -1,11 +1,8 @@
 <?php
 
-use App\Providers\AppServiceProvider;
-use App\Providers\AuthServiceProvider;
-use App\Providers\SmsServiceProvider;
-
 return [
-    AppServiceProvider::class,
-    AuthServiceProvider::class,
-    SmsServiceProvider::class,
+    App\Providers\AppServiceProvider::class,
+    App\Providers\AuthServiceProvider::class,
+    App\Providers\HorizonServiceProvider::class,
+    App\Providers\SmsServiceProvider::class,
 ];

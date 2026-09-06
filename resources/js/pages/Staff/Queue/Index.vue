@@ -6,8 +6,9 @@ import StatusBadge from '@/components/StatusBadge.vue';
 import StaffLayout from '@/layouts/StaffLayout.vue';
 import { duration } from '@/lib/format';
 import type { Appointment, PageProps } from '@/types';
+import { useLiveChannel } from '@/lib/useLiveChannel';
 import { Link, router, usePage } from '@inertiajs/vue3';
-import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 
 interface QueueAction {
     value: string;
@@ -25,6 +26,7 @@ type QueueRow = Appointment & {
 };
 
 const props = defineProps<{
+    factoryId: number;
     date: string;
     jalaliDate: string;
     isToday: boolean;
@@ -121,21 +123,40 @@ function shiftDate(days: number) {
     router.get(route('staff.queue.index'), { date: next.toISOString().slice(0, 10) }, { preserveScroll: true });
 }
 
-/** تازه‌سازی خودکار صف تا وقتی WebSocket اضافه شود */
+/**
+ * صف زنده.
+ *
+ * WebSocket مسیر اصلی است؛ polling فقط پشتیبان است و وقتی اتصال زنده برقرار
+ * باشد فاصله‌اش بسیار طولانی می‌شود. اپراتور نباید هر ده ثانیه صفحه را
+ * refresh کند و دیتابیس هم نباید بی‌دلیل کشیده شود.
+ */
+const { connected } = useLiveChannel(props.isToday ? `factory.${props.factoryId}.queue` : null, {
+    'queue.changed': () => refresh(),
+});
+
 let poller: ReturnType<typeof setInterval> | null = null;
 
+function refresh() {
+    if (document.hidden || pending.value) return;
+
+    router.reload({ only: ['appointments', 'counters'] });
+}
+
 onMounted(() => {
-    if (props.isToday) {
-        poller = setInterval(() => {
-            if (!document.hidden && !pending.value) {
-                router.reload({ only: ['appointments', 'counters'] });
-            }
-        }, 20_000);
-    }
+    if (!props.isToday) return;
+
+    poller = setInterval(refresh, 20_000);
 });
 
 onUnmounted(() => {
     if (poller) clearInterval(poller);
+});
+
+// وقتی اتصال زنده برقرار شد، دیگر لازم نیست هر ۲۰ ثانیه سؤال کنیم
+watch(connected, (isLive) => {
+    if (poller) clearInterval(poller);
+
+    poller = setInterval(refresh, isLive ? 120_000 : 20_000);
 });
 </script>
 
@@ -145,9 +166,17 @@ onUnmounted(() => {
             <div class="flex flex-wrap items-center justify-between gap-3">
                 <div>
                     <h1 class="text-lg font-bold text-slate-900">مدیریت صف کامیون‌ها</h1>
-                    <p class="mt-0.5 text-sm text-slate-500">
-                        {{ jalaliDate }}
+                    <p class="mt-0.5 flex items-center gap-2 text-sm text-slate-500">
+                        <span>{{ jalaliDate }}</span>
                         <span v-if="isToday" class="text-brand-600">· امروز</span>
+                        <span
+                            v-if="isToday && connected"
+                            class="inline-flex items-center gap-1 text-xs text-emerald-600"
+                            title="به‌روزرسانی زنده برقرار است"
+                        >
+                            <span class="size-1.5 rounded-full bg-emerald-500" />
+                            زنده
+                        </span>
                     </p>
                 </div>
 

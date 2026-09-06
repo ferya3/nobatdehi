@@ -73,7 +73,8 @@ final class TransitionAppointment
                 'created_at' => now(),
             ]);
 
-            AppointmentTransitioned::dispatch($fresh->id, $from->value, $to->value);
+            // بعد از commit: Listener های صف‌شده باید وضعیت نهایی را ببینند
+            DB::afterCommit(fn () => AppointmentTransitioned::dispatch($fresh->id, $from->value, $to->value));
 
             return $fresh;
         });

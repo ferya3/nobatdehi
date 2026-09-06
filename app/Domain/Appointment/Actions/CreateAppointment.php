@@ -8,6 +8,7 @@ use App\Domain\Appointment\Data\NewAppointment;
 use App\Domain\Appointment\Enums\AppointmentStatus;
 use App\Domain\Appointment\Exceptions\BookingException;
 use App\Models\Appointment;
+use App\Events\AppointmentCreated;
 use App\Models\AppointmentSlot;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
@@ -81,6 +82,10 @@ final class CreateAppointment
                 'ip' => $data->ip,
                 'created_at' => now(),
             ]);
+
+            // بعد از commit اجرا می‌شود: Listener صف‌شده نباید نوبتی را بخواند
+            // که تراکنشش هنوز بسته نشده.
+            DB::afterCommit(fn () => AppointmentCreated::dispatch($appointment->id));
 
             return $appointment;
         });
