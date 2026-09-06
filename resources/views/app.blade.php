@@ -10,6 +10,7 @@
 
     <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 
+    @routes
     @vite(['resources/css/app.css', 'resources/js/app.ts'])
     @inertiaHead
 </head>

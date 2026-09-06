@@ -34,7 +34,7 @@
 
 @layer base {
     html {
-        font-feature-settings: 'ss01', 'ss02';
+        font-feature-settings: 'ss01'; /* ارقام لاتین را فارسی نمایش می‌دهد، بدون تغییر متن زیرین */
     }
 
     body {
@@ -51,4 +51,16 @@
 
 @utility card {
     @apply rounded-2xl border border-slate-200/80 bg-white shadow-sm;
+}
+
+/*
+ * هر عدد داخل متن فارسی باید bidi-isolate باشد.
+ * بدون این، «۰۹۱۲ ۳۴۵ ۶۷۸۹» در پاراگراف راست‌به‌چپ به‌صورت
+ * «۶۷۸۹ ۳۴۵ ۰۹۱۲» دیده می‌شود و «۰۲:۰۰» هم می‌شکند.
+ */
+@utility num {
+    direction: ltr;
+    unicode-bidi: isolate;
+    display: inline-block;
+    font-variant-numeric: tabular-nums;
 }

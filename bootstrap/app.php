@@ -21,6 +21,11 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
 
         $middleware->trustProxies(at: '*');
+
+        // دو دروازه‌ی ورود جدا: راننده و کارکنان
+        $middleware->redirectGuestsTo(fn (Request $request) => $request->is('panel*')
+            ? route('staff.login')
+            : route('driver.login'));
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
