@@ -25,6 +25,33 @@
 | SMS | سرویس انتزاعی (Kavenegar / لاگ) |
 | تاریخ | شمسی (morilog/jalali) |
 
+## نصب روی سرور (Ubuntu 24.04)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ferya3/nobatdehi/claude/system-architecture-b9hlgv/install.sh \
+  | sudo bash -s -- --domain factory.ir --email you@example.com
+```
+
+دامنه باید از قبل به IP سرور اشاره کند، وگرنه گرفتن گواهی HTTPS شکست می‌خورد
+(بقیه‌ی نصب انجام می‌شود و بعداً می‌شود `sudo certbot --nginx -d factory.ir` زد).
+
+اسکریپت PHP 8.4، PostgreSQL، Redis، Nginx و Node را نصب می‌کند، کد را می‌گیرد،
+`.env` را با رمزهای تصادفی می‌سازد، مهاجرت‌ها را اجرا می‌کند، Frontend را build
+می‌کند و سرویس‌های systemd (Reverb، Horizon، زمان‌بند) را بالا می‌آورد.
+اجرای دوباره‌اش نصب را به‌روزرسانی می‌کند و رمزها و داده‌ها را دست نمی‌زند.
+
+| گزینه | کار |
+|---|---|
+| `--domain factory.ir` | نام دامنه و فعال‌کردن HTTPS |
+| `--email you@example.com` | ایمیل برای هشدارهای انقضای گواهی |
+| `--no-tls` | بدون HTTPS (برای تست یا وقتی DNS آماده نیست) |
+| `--branch main` | نصب از شاخه‌ی دیگر |
+| `--demo` | ساخت صف نمونه برای امروز |
+| `--skip-packages` | نصب بسته‌های سیستمی را رد کن (وقتی خودتان مدیریتشان می‌کنید) |
+
+بعد از نصب حتماً رمز کاربران نمونه را عوض کنید و پنل پیامکی را در `.env`
+تنظیم کنید؛ تا وقتی `SMS_PROVIDER=log` است پیامک‌ها فقط در لاگ نوشته می‌شوند.
+
 ## راه‌اندازی محلی
 
 ```bash

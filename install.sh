@@ -1,0 +1,669 @@
+#!/usr/bin/env bash
+#
+# نصب سامانه نوبت‌دهی بارگیری روی Ubuntu 24.04
+#
+#   curl -fsSL https://raw.githubusercontent.com/ferya3/nobatdehi/claude/system-architecture-b9hlgv/install.sh \
+#     | sudo bash -s -- --domain factory.ir --email you@example.com
+#
+# اسکریپت idempotent است: اجرای دوباره، نصب را به‌روزرسانی می‌کند و
+# رمزها و داده‌ها را دست نمی‌زند.
+
+set -Eeuo pipefail
+
+# ---------------------------------------------------------------- تنظیمات
+
+REPO_URL="${REPO_URL:-https://github.com/ferya3/nobatdehi.git}"
+REPO_BRANCH="${REPO_BRANCH:-claude/system-architecture-b9hlgv}"
+APP_DIR="${APP_DIR:-/var/www/nobatdehi}"
+APP_USER="${APP_USER:-nobatdehi}"
+DB_NAME="${DB_NAME:-nobatdehi}"
+DB_USER="${DB_USER:-nobatdehi}"
+PHP_VERSION="${PHP_VERSION:-8.4}"
+NODE_MAJOR="22"
+
+DOMAIN=""
+ENABLE_TLS="auto"
+TLS_EMAIL=""
+SEED_DEMO="no"
+SKIP_PACKAGES="no"
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --domain)     DOMAIN="${2:-}"; shift 2 ;;
+        --email)      TLS_EMAIL="${2:-}"; shift 2 ;;
+        --branch)     REPO_BRANCH="${2:-}"; shift 2 ;;
+        --no-tls)     ENABLE_TLS="no"; shift ;;
+        --demo)       SEED_DEMO="yes"; shift ;;
+        --skip-packages) SKIP_PACKAGES="yes"; shift ;;
+        -h|--help)
+            grep '^#' "$0" | head -8 | sed 's/^# \{0,1\}//'
+            exit 0 ;;
+        *) echo "گزینه‌ی ناشناخته: $1" >&2; exit 1 ;;
+    esac
+done
+
+# ------------------------------------------------------------------ کمکی
+
+BOLD=$'\e[1m'; GREEN=$'\e[32m'; YELLOW=$'\e[33m'; RED=$'\e[31m'; RESET=$'\e[0m'
+
+step()  { printf '\n%s==> %s%s\n' "$BOLD" "$1" "$RESET"; }
+info()  { printf '    %s\n' "$1"; }
+warn()  { printf '    %s%s%s\n' "$YELLOW" "$1" "$RESET"; }
+die()   { printf '\n%sخطا: %s%s\n' "$RED" "$1" "$RESET" >&2; exit 1; }
+
+# خطای هر خط را با شماره‌اش گزارش کن، نه یک «Aborted» خشک و خالی
+trap 'die "اجرا در خط $LINENO متوقف شد (فرمان: $BASH_COMMAND)"' ERR
+
+as_app() { sudo -u "$APP_USER" -H bash -lc "cd '$APP_DIR' && $1"; }
+
+# روی سرور واقعی همیشه systemd است، ولی این اسکریپت ممکن است داخل کانتینر یا
+# WSL هم اجرا شود. آنجا systemctl فقط «Failed to connect to bus» می‌دهد.
+if [[ -d /run/systemd/system ]]; then
+    SYSTEMD_OK="yes"
+else
+    SYSTEMD_OK="no"
+fi
+
+svc() {
+    local action="$1"; shift
+
+    if [[ "$SYSTEMD_OK" == "yes" ]]; then
+        case "$action" in
+            enable-now) systemctl enable --now "$@" >/dev/null ;;
+            *)          systemctl "$action" "$@" ;;
+        esac
+        return
+    fi
+
+    local unit
+    for unit in "$@"; do
+        unit="${unit%.service}"
+        case "$action" in
+            enable-now|start) service "$unit" start >/dev/null 2>&1 || true ;;
+            restart|reload)   service "$unit" restart >/dev/null 2>&1 || true ;;
+        esac
+    done
+}
+
+# مقدار یک کلید را در .env جایگزین یا اضافه می‌کند
+set_env() {
+    local key="$1" value="$2" file="$APP_DIR/.env"
+    if grep -qE "^${key}=" "$file"; then
+        # مقدار ممکن است / یا & داشته باشد، پس از python برای جایگزینی امن استفاده می‌کنیم
+        python3 - "$file" "$key" "$value" <<'PY'
+import sys, pathlib
+path, key, value = sys.argv[1], sys.argv[2], sys.argv[3]
+p = pathlib.Path(path)
+out, written = [], False
+for line in p.read_text().splitlines():
+    if line.startswith(f'{key}='):
+        # اولین تعریف را جایگزین می‌کنیم و بقیه‌ی تکراری‌ها را می‌اندازیم دور،
+        # وگرنه .env با دو خط از یک کلید بیرون می‌آید
+        if not written:
+            out.append(f'{key}={value}')
+            written = True
+        continue
+    out.append(line)
+p.write_text('\n'.join(out) + '\n')
+PY
+    else
+        printf '%s=%s\n' "$key" "$value" >> "$file"
+    fi
+}
+
+random_secret() { head -c 32 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 32; }
+
+# ------------------------------------------------------- بررسی پیش‌نیازها
+
+[[ $EUID -eq 0 ]] || die "این اسکریپت باید با sudo اجرا شود."
+
+if [[ -r /etc/os-release ]]; then
+    . /etc/os-release
+    [[ "${VERSION_ID:-}" == "24.04" ]] || warn "این اسکریپت برای Ubuntu 24.04 نوشته شده؛ نسخه‌ی شما ${VERSION_ID:-نامشخص} است."
+fi
+
+if [[ -z "$DOMAIN" ]]; then
+    warn "دامنه داده نشد؛ سرویس روی IP سرور و بدون HTTPS بالا می‌آید."
+    warn "برای HTTPS: sudo bash install.sh --domain factory.ir --email you@example.com"
+    ENABLE_TLS="no"
+fi
+
+SERVER_NAME="${DOMAIN:-_}"
+
+step "شروع نصب سامانه نوبت‌دهی بارگیری"
+info "دامنه: ${DOMAIN:-«بدون دامنه»}"
+info "مسیر نصب: $APP_DIR"
+info "شاخه: $REPO_BRANCH"
+
+# ------------------------------------------------------------- بسته‌ها
+
+step "نصب بسته‌های سیستمی"
+
+export DEBIAN_FRONTEND=noninteractive
+export NEEDRESTART_MODE=a
+
+if [[ "$SKIP_PACKAGES" == "yes" ]]; then
+    info "با --skip-packages نصب بسته‌ها رد شد؛ فرض بر این است که خودتان آن‌ها را مدیریت می‌کنید."
+else
+    apt-get update -qq
+    apt-get install -y -qq ca-certificates curl gnupg lsb-release software-properties-common unzip git acl >/dev/null
+
+    step "افزودن مخزن PHP ${PHP_VERSION}"
+
+    if ! apt-cache policy "php${PHP_VERSION}-fpm" 2>/dev/null | grep -q Candidate:.*[0-9]; then
+        add-apt-repository -y ppa:ondrej/php >/dev/null
+        apt-get update -qq
+    fi
+
+    step "نصب PHP ${PHP_VERSION}، PostgreSQL، Redis و Nginx"
+
+    # فهرست عمداً کوتاه است: فقط چیزی که وابستگی‌های پروژه واقعاً می‌خواهند.
+    # pcntl و posix از php-cli می‌آیند و Horizon بدون آن‌ها کار نمی‌کند.
+    apt-get install -y -qq \
+        nginx \
+        postgresql postgresql-contrib \
+        redis-server \
+        "php${PHP_VERSION}-fpm" "php${PHP_VERSION}-cli" \
+        "php${PHP_VERSION}-pgsql" "php${PHP_VERSION}-redis" \
+        "php${PHP_VERSION}-mbstring" "php${PHP_VERSION}-xml" \
+        "php${PHP_VERSION}-curl" "php${PHP_VERSION}-zip" \
+        "php${PHP_VERSION}-opcache" \
+        >/dev/null
+
+    step "نصب Node.js ${NODE_MAJOR}"
+
+    if ! command -v node >/dev/null || [[ "$(node -v | cut -c2- | cut -d. -f1)" -lt "$NODE_MAJOR" ]]; then
+        curl -fsSL "https://deb.nodesource.com/setup_${NODE_MAJOR}.x" | bash - >/dev/null 2>&1
+        apt-get install -y -qq nodejs >/dev/null
+    fi
+
+    step "نصب Composer"
+
+    if ! command -v composer >/dev/null; then
+        curl -fsSL https://getcomposer.org/installer -o /tmp/composer-setup.php
+        php /tmp/composer-setup.php --quiet --install-dir=/usr/local/bin --filename=composer
+        rm -f /tmp/composer-setup.php
+    fi
+fi
+
+step "بررسی پیش‌نیازهای اجرا"
+
+for binary in php composer node npm nginx psql redis-cli; do
+    command -v "$binary" >/dev/null || die "«${binary}» پیدا نشد. بدون --skip-packages اجرا کنید یا خودتان نصبش کنید."
+done
+
+# nginx بدون FPM نمی‌تواند PHP را سرو کند؛ بهتر است همین‌جا بفهمیم تا وسط کار.
+[[ -d "/etc/php/${PHP_VERSION}/fpm" ]] || die "php${PHP_VERSION}-fpm نصب نیست. بدون --skip-packages اجرا کنید، یا خودتان نصبش کنید."
+
+INSTALLED_PHP="$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;')"
+[[ "$INSTALLED_PHP" == "$PHP_VERSION" ]] || warn "PHP نصب‌شده ${INSTALLED_PHP} است، نه ${PHP_VERSION}."
+
+# این فهرست از ext-* های واقعی composer.lock درآمده، نه از عادت.
+# نبودِ pcntl یا posix باعث می‌شود Horizon بی‌سروصدا کار نکند.
+for ext in pdo_pgsql redis mbstring dom simplexml curl zip openssl tokenizer fileinfo pcntl posix; do
+    php -m | grep -qix "$ext" || die "افزونه‌ی PHP «${ext}» نصب نیست."
+done
+
+# ------------------------------------------------------------ کاربر و کد
+
+step "آماده‌سازی کاربر و کد برنامه"
+
+if ! id -u "$APP_USER" >/dev/null 2>&1; then
+    adduser --system --group --home "$APP_DIR" --shell /bin/bash "$APP_USER" >/dev/null
+    info "کاربر $APP_USER ساخته شد."
+fi
+
+mkdir -p "$APP_DIR"
+chown -R "$APP_USER:$APP_USER" "$APP_DIR"
+
+# گیت باید مخزن را با هر مالکی امن بداند، وگرنه دستورهای بعدی رد می‌شوند
+git config --global --add safe.directory "$APP_DIR" 2>/dev/null || true
+
+if [[ -d "$APP_DIR/.git" ]]; then
+    info "به‌روزرسانی کد موجود…"
+    as_app "git fetch --depth 1 origin '$REPO_BRANCH' && git checkout -B '$REPO_BRANCH' 'origin/$REPO_BRANCH' && git reset --hard 'origin/$REPO_BRANCH'"
+else
+    info "دریافت کد…"
+    sudo -u "$APP_USER" -H git clone --depth 1 --branch "$REPO_BRANCH" "$REPO_URL" "$APP_DIR"
+fi
+
+# ------------------------------------------------------------- دیتابیس
+
+step "آماده‌سازی PostgreSQL"
+
+svc enable-now postgresql
+
+DB_PASSWORD_FILE="/etc/nobatdehi/db_password"
+mkdir -p /etc/nobatdehi && chmod 700 /etc/nobatdehi
+
+if [[ -f "$DB_PASSWORD_FILE" ]]; then
+    DB_PASSWORD="$(cat "$DB_PASSWORD_FILE")"
+    info "رمز دیتابیس موجود استفاده شد."
+else
+    DB_PASSWORD="$(random_secret)"
+    printf '%s' "$DB_PASSWORD" > "$DB_PASSWORD_FILE"
+    chmod 600 "$DB_PASSWORD_FILE"
+fi
+
+sudo -u postgres psql -v ON_ERROR_STOP=1 -q <<SQL
+DO \$\$
+BEGIN
+    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '${DB_USER}') THEN
+        CREATE ROLE ${DB_USER} LOGIN PASSWORD '${DB_PASSWORD}';
+    ELSE
+        ALTER ROLE ${DB_USER} WITH PASSWORD '${DB_PASSWORD}';
+    END IF;
+END
+\$\$;
+SQL
+
+if ! sudo -u postgres psql -tAc "SELECT 1 FROM pg_database WHERE datname='${DB_NAME}'" | grep -q 1; then
+    sudo -u postgres createdb -O "$DB_USER" "$DB_NAME"
+    info "دیتابیس ${DB_NAME} ساخته شد."
+else
+    # دیتابیسِ همنام از قبل هست. اگر مال کس دیگری باشد، مهاجرت‌ها بعداً با
+    # «permission denied for table migrations» می‌شکنند — پیامی که هیچ نمی‌گوید
+    # مشکل از مالکیت است. همین‌جا صریح شکست می‌خوریم.
+    DB_OWNER="$(sudo -u postgres psql -tAc "SELECT pg_catalog.pg_get_userbyid(datdba) FROM pg_database WHERE datname='${DB_NAME}'")"
+
+    if [[ "$DB_OWNER" != "$DB_USER" ]]; then
+        die "دیتابیس «${DB_NAME}» از قبل وجود دارد و مالکش «${DB_OWNER}» است، نه «${DB_USER}».
+    اگر این همان دیتابیس برنامه است:  sudo -u postgres psql -c 'ALTER DATABASE ${DB_NAME} OWNER TO ${DB_USER};'
+    اگر دیتابیس دیگری است، با نام دیگری نصب کنید:  DB_NAME=nobatdehi2 sudo -E bash install.sh"
+    fi
+
+    info "دیتابیس ${DB_NAME} از قبل موجود بود."
+fi
+
+# در PostgreSQL 15 به بعد، PUBLIC دیگر روی schema public حق CREATE ندارد؛
+# بدون این، مهاجرت روی دیتابیسی که با ابزار دیگری ساخته شده شکست می‌خورد.
+sudo -u postgres psql -v ON_ERROR_STOP=1 -q -d "$DB_NAME" <<SQL
+GRANT ALL ON SCHEMA public TO ${DB_USER};
+ALTER SCHEMA public OWNER TO ${DB_USER};
+SQL
+
+step "آماده‌سازی Redis"
+
+svc enable-now redis-server
+
+# ---------------------------------------------------------------- .env
+
+step "تنظیم فایل .env"
+
+if [[ ! -f "$APP_DIR/.env" ]]; then
+    sudo -u "$APP_USER" cp "$APP_DIR/.env.example" "$APP_DIR/.env"
+    info ".env از روی .env.example ساخته شد."
+fi
+
+if [[ -n "$DOMAIN" ]]; then
+    if [[ "$ENABLE_TLS" == "no" ]]; then
+        APP_URL="http://${DOMAIN}"; REVERB_SCHEME="http"; REVERB_PUBLIC_PORT="80"
+    else
+        APP_URL="https://${DOMAIN}"; REVERB_SCHEME="https"; REVERB_PUBLIC_PORT="443"
+    fi
+    REVERB_PUBLIC_HOST="$DOMAIN"
+else
+    SERVER_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
+    APP_URL="http://${SERVER_IP:-localhost}"
+    REVERB_SCHEME="http"; REVERB_PUBLIC_PORT="80"; REVERB_PUBLIC_HOST="${SERVER_IP:-localhost}"
+fi
+
+set_env APP_ENV production
+set_env APP_DEBUG false
+set_env APP_URL "$APP_URL"
+set_env APP_LOCALE fa
+set_env APP_TIMEZONE Asia/Tehran
+
+set_env DB_CONNECTION pgsql
+set_env DB_HOST 127.0.0.1
+set_env DB_PORT 5432
+set_env DB_DATABASE "$DB_NAME"
+set_env DB_USERNAME "$DB_USER"
+set_env DB_PASSWORD "$DB_PASSWORD"
+
+set_env CACHE_STORE redis
+set_env SESSION_DRIVER redis
+set_env QUEUE_CONNECTION redis
+set_env REDIS_CLIENT phpredis
+
+set_env BROADCAST_CONNECTION reverb
+
+# کلیدهای Reverb فقط یک‌بار ساخته می‌شوند؛ عوض‌شدنشان همه‌ی
+# اتصال‌های باز را قطع می‌کند.
+if ! grep -qE '^REVERB_APP_KEY=.+' "$APP_DIR/.env"; then
+    set_env REVERB_APP_ID "$(shuf -i 100000-999999 -n 1)"
+    set_env REVERB_APP_KEY "$(random_secret | tr 'A-Z' 'a-z')"
+    set_env REVERB_APP_SECRET "$(random_secret | tr 'A-Z' 'a-z')"
+fi
+
+set_env REVERB_HOST 127.0.0.1
+set_env REVERB_PORT 8080
+set_env REVERB_SERVER_HOST 0.0.0.0
+set_env REVERB_SERVER_PORT 8080
+
+# مرورگر از پشت Nginx وصل می‌شود، پس میزبان و پورت عمومی فرق دارند
+set_env VITE_REVERB_APP_KEY '${REVERB_APP_KEY}'
+set_env VITE_REVERB_HOST "$REVERB_PUBLIC_HOST"
+set_env VITE_REVERB_PORT "$REVERB_PUBLIC_PORT"
+set_env VITE_REVERB_SCHEME "$REVERB_SCHEME"
+
+set_env SMS_PROVIDER log
+set_env OTP_EXPOSE_IN_RESPONSE false
+
+chown "$APP_USER:$APP_USER" "$APP_DIR/.env"
+chmod 640 "$APP_DIR/.env"
+
+# ------------------------------------------------------------- ساخت برنامه
+
+step "نصب وابستگی‌های PHP"
+as_app "COMPOSER_ALLOW_SUPERUSER=0 composer install --no-interaction --no-dev --prefer-dist --optimize-autoloader --quiet"
+
+if ! grep -qE '^APP_KEY=.+' "$APP_DIR/.env"; then
+    as_app "php artisan key:generate --force --quiet"
+    info "APP_KEY ساخته شد."
+fi
+
+step "ساخت فایل‌های Frontend"
+as_app "npm ci --no-fund --no-audit --silent"
+as_app "npm run build --silent"
+
+step "اجرای مهاجرت‌ها و داده‌های پایه"
+as_app "php artisan migrate --force --no-interaction"
+as_app "php artisan db:seed --force --no-interaction"
+as_app "php artisan slots:generate"
+
+if [[ "$SEED_DEMO" == "yes" ]]; then
+    as_app "php artisan db:seed --class=DemoQueueSeeder --force --no-interaction"
+fi
+
+step "بهینه‌سازی و دسترسی فایل‌ها"
+[[ -e "$APP_DIR/public/storage" ]] || as_app "php artisan storage:link"
+as_app "php artisan config:cache && php artisan route:cache && php artisan view:cache"
+
+chown -R "$APP_USER:www-data" "$APP_DIR/storage" "$APP_DIR/bootstrap/cache"
+chmod -R ug+rwX "$APP_DIR/storage" "$APP_DIR/bootstrap/cache"
+# فایل‌های جدیدی که php-fpm می‌سازد هم باید برای گروه نوشتنی بمانند
+setfacl -R -d -m g:www-data:rwx "$APP_DIR/storage" "$APP_DIR/bootstrap/cache" 2>/dev/null || true
+
+# نگینکس باید بتواند public/ را بخواند
+chmod o+x "$APP_DIR"
+
+# ------------------------------------------------------------ سرویس‌ها
+
+step "ساخت سرویس‌های systemd"
+
+cat > /etc/systemd/system/nobatdehi-reverb.service <<UNIT
+[Unit]
+Description=Nobatdehi Reverb WebSocket server
+After=network.target redis-server.service
+
+[Service]
+Type=simple
+User=${APP_USER}
+WorkingDirectory=${APP_DIR}
+ExecStart=/usr/bin/php artisan reverb:start
+Restart=always
+RestartSec=3
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
+cat > /etc/systemd/system/nobatdehi-horizon.service <<UNIT
+[Unit]
+Description=Nobatdehi Horizon queue workers
+After=network.target redis-server.service postgresql.service
+
+[Service]
+Type=simple
+User=${APP_USER}
+WorkingDirectory=${APP_DIR}
+ExecStart=/usr/bin/php artisan horizon
+# ترمینیت به Horizon می‌گوید کار جاری را تمام کند و بعد خارج شود
+ExecStop=/usr/bin/php artisan horizon:terminate
+Restart=always
+RestartSec=3
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
+cat > /etc/systemd/system/nobatdehi-scheduler.service <<UNIT
+[Unit]
+Description=Nobatdehi scheduler
+After=network.target
+
+[Service]
+Type=oneshot
+User=${APP_USER}
+WorkingDirectory=${APP_DIR}
+ExecStart=/usr/bin/php artisan schedule:run
+UNIT
+
+cat > /etc/systemd/system/nobatdehi-scheduler.timer <<UNIT
+[Unit]
+Description=Run the Nobatdehi scheduler every minute
+
+[Timer]
+OnCalendar=*:0/1
+AccuracySec=10s
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+UNIT
+
+# در کانتینر یا WSL ممکن است systemd اصلاً در حال اجرا نباشد؛ فایل‌ها را
+# می‌نویسیم ولی وانمود نمی‌کنیم که سرویس بالا آمده.
+if [[ "$SYSTEMD_OK" == "yes" ]]; then
+    systemctl daemon-reload
+    systemctl enable --now nobatdehi-reverb.service nobatdehi-horizon.service nobatdehi-scheduler.timer >/dev/null
+    systemctl restart nobatdehi-reverb.service nobatdehi-horizon.service
+else
+    warn "systemd در حال اجرا نیست؛ فایل‌های سرویس نوشته شدند ولی فعال نشدند."
+    warn "روی یک سرور واقعی: systemctl enable --now nobatdehi-reverb nobatdehi-horizon nobatdehi-scheduler.timer"
+fi
+
+# --------------------------------------------------------------- Nginx
+
+step "پیکربندی Nginx"
+
+# روی میزبان‌های بدون IPv6 (بعضی VPSها و کانتینرها) دستور listen [::]
+# کل nginx را از کار می‌اندازد، نه فقط این سایت را.
+if [[ -f /proc/net/if_inet6 ]]; then
+    LISTEN_V6="    listen [::]:80;"
+else
+    LISTEN_V6=""
+    info "IPv6 روی این میزبان فعال نیست؛ فقط IPv4 پیکربندی شد."
+fi
+
+cat > /etc/nginx/sites-available/nobatdehi <<NGINX
+server {
+    listen 80;
+${LISTEN_V6}
+    server_name ${SERVER_NAME};
+    root ${APP_DIR}/public;
+
+    index index.php;
+    charset utf-8;
+
+    client_max_body_size 20m;
+
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+    location = /favicon.ico { access_log off; log_not_found off; }
+    location = /robots.txt  { access_log off; log_not_found off; }
+
+    # Service Worker باید از ریشه سرو شود و کش نشود
+    location = /sw.js {
+        add_header Cache-Control "no-cache, must-revalidate";
+        try_files \$uri =404;
+    }
+
+    # دارایی‌های ساخت، نامشان hash دارد پس کش طولانی امن است
+    location /build/ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+        try_files \$uri =404;
+    }
+
+    # WebSocket و API ناقل Reverb
+    location ~ ^/(app|apps)(/|$) {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+    }
+
+    location / {
+        try_files \$uri \$uri/ /index.php?\$query_string;
+    }
+
+    location ~ \.php\$ {
+        fastcgi_pass unix:/run/php/php${PHP_VERSION}-fpm.sock;
+        fastcgi_param SCRIPT_FILENAME \$realpath_root\$fastcgi_script_name;
+        fastcgi_param DOCUMENT_ROOT \$realpath_root;
+        include fastcgi_params;
+        fastcgi_hide_header X-Powered-By;
+    }
+
+    location ~ /\.(?!well-known).* {
+        deny all;
+    }
+}
+NGINX
+
+ln -sf /etc/nginx/sites-available/nobatdehi /etc/nginx/sites-enabled/nobatdehi
+rm -f /etc/nginx/sites-enabled/default
+
+NGINX_TEST="$(nginx -t 2>&1 || true)"
+grep -q "test is successful" <<<"$NGINX_TEST" || die "پیکربندی Nginx معتبر نیست:
+${NGINX_TEST}"
+
+svc enable-now nginx
+svc reload nginx
+
+step "پیکربندی PHP-FPM"
+
+PHP_INI="/etc/php/${PHP_VERSION}/fpm/conf.d/99-nobatdehi.ini"
+cat > "$PHP_INI" <<INI
+; تنظیمات production
+expose_php = Off
+memory_limit = 512M
+upload_max_filesize = 20M
+post_max_size = 20M
+max_execution_time = 60
+date.timezone = Asia/Tehran
+
+opcache.enable = 1
+opcache.memory_consumption = 192
+opcache.max_accelerated_files = 20000
+opcache.validate_timestamps = 0
+INI
+
+svc restart "php${PHP_VERSION}-fpm"
+
+# ----------------------------------------------------------------- TLS
+
+if [[ "$ENABLE_TLS" != "no" && -n "$DOMAIN" ]]; then
+    step "دریافت گواهی HTTPS"
+
+    apt-get install -y -qq certbot python3-certbot-nginx >/dev/null
+
+    CERTBOT_ARGS=(--nginx -d "$DOMAIN" --agree-tos --redirect --non-interactive)
+
+    if [[ -n "$TLS_EMAIL" ]]; then
+        CERTBOT_ARGS+=(-m "$TLS_EMAIL")
+    else
+        CERTBOT_ARGS+=(--register-unsafely-without-email)
+    fi
+
+    if certbot "${CERTBOT_ARGS[@]}"; then
+        info "گواهی نصب شد و تمدید خودکار فعال است."
+    else
+        warn "دریافت گواهی ناموفق بود (احتمالاً DNS هنوز به این سرور اشاره نمی‌کند)."
+        warn "بعد از درست‌شدن DNS اجرا کنید: sudo certbot --nginx -d ${DOMAIN}"
+        # بدون HTTPS، مرورگر WebSocket امن را رد می‌کند؛ .env باید صادق بماند
+        set_env VITE_REVERB_SCHEME http
+        set_env VITE_REVERB_PORT 80
+        set_env APP_URL "http://${DOMAIN}"
+        as_app "npm run build --silent"
+        as_app "php artisan config:cache"
+    fi
+fi
+
+# --------------------------------------------------------------- فایروال
+
+if command -v ufw >/dev/null && ufw status 2>/dev/null | grep -q "Status: active"; then
+    step "تنظیم فایروال"
+    ufw allow 'Nginx Full' >/dev/null
+    info "پورت‌های ۸۰ و ۴۴۳ باز شدند. پورت ۸۰۸۰ (Reverb) عمداً بسته می‌ماند؛ از پشت Nginx سرو می‌شود."
+fi
+
+# ----------------------------------------------------------------- پایان
+
+step "بررسی نهایی"
+
+sleep 2
+HEALTH_URL="${APP_URL}/up"
+if curl -fsS --max-time 10 -o /dev/null "$HEALTH_URL" 2>/dev/null; then
+    info "${GREEN}برنامه پاسخ می‌دهد.${RESET}"
+else
+    warn "پاسخ سلامت از ${HEALTH_URL} گرفته نشد؛ لاگ‌ها را ببینید."
+fi
+
+if [[ "$SYSTEMD_OK" == "yes" ]]; then
+    for unit in nobatdehi-reverb nobatdehi-horizon; do
+        if systemctl is-active --quiet "$unit"; then
+            info "${GREEN}${unit}: در حال اجرا${RESET}"
+        else
+            warn "${unit}: اجرا نشد — journalctl -u ${unit} -n 50"
+        fi
+    done
+fi
+
+cat <<SUMMARY
+
+${BOLD}${GREEN}نصب تمام شد.${RESET}
+
+  آدرس راننده     ${APP_URL}/queue
+  آدرس کارکنان    ${APP_URL}/panel
+
+  ${BOLD}کاربران پیش‌فرض${RESET} — رمز همه: password
+  admin@example.test      مدیر ارشد سامانه
+  manager@example.test    مدیر کارخانه
+  operator@example.test   اپراتور
+  gate@example.test       نگهبانی
+  ceo@example.test        مدیرعامل
+
+  ${YELLOW}رمز این کاربران را همین امروز عوض کنید.${RESET}
+
+  ${BOLD}قدم‌های بعدی${RESET}
+  1) پنل پیامکی: در ${APP_DIR}/.env مقدار SMS_PROVIDER=kavenegar و
+     KAVENEGAR_API_KEY را بگذارید، و شماره مدیران را در
+     SMS_MANAGER_RECIPIENTS (با کاما جدا شده).
+     تا وقتی SMS_PROVIDER=log است، پیامک‌ها فقط در لاگ نوشته می‌شوند.
+  2) بعد از هر تغییر .env:  sudo -u ${APP_USER} php ${APP_DIR}/artisan config:cache
+  3) پشتیبان‌گیری دیتابیس را تنظیم کنید — رمز دیتابیس در ${DB_PASSWORD_FILE}
+
+  ${BOLD}سرویس‌ها${RESET}
+  systemctl status nobatdehi-reverb nobatdehi-horizon
+  journalctl -u nobatdehi-horizon -f
+
+SUMMARY
