@@ -28,6 +28,21 @@ class Driver extends Authenticatable
         ];
     }
 
+    /**
+     * راننده رمز عبور ندارد — ورودش فقط با کد یک‌بارمصرف است.
+     *
+     * SessionGuard هنگام ساخت کوکی «مرا به خاطر بسپار» هش رمز را می‌خواند تا
+     * تغییر رمز، کوکی‌های قدیمی را باطل کند. اینجا رمزی وجود ندارد، پس رشته‌ی
+     * خالی برمی‌گردانیم؛ اعتبار کوکی را remember_token تأمین می‌کند که در
+     * خروج از حساب عوض می‌شود.
+     *
+     * بدون این، ورود یک راننده‌ی تکراری با MissingAttributeException می‌شکست.
+     */
+    public function getAuthPassword(): string
+    {
+        return '';
+    }
+
     public function trucks(): BelongsToMany
     {
         return $this->belongsToMany(Truck::class)->withPivot('last_used_at');

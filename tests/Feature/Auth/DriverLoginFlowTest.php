@@ -41,6 +41,34 @@ final class DriverLoginFlowTest extends TestCase
     }
 
     #[Test]
+    public function a_returning_driver_can_log_in_again(): void
+    {
+        // راننده‌ای که از قبل در دیتابیس هست — حالت رایج، نه استثنا.
+        // این مسیر با مسیر «راننده‌ی تازه» فرق دارد: مدل از دیتابیس خوانده
+        // می‌شود و wasRecentlyCreated نیست، پس دسترسی به صفت‌های نبوده
+        // (مثل password که راننده اصلاً ندارد) خطا می‌دهد.
+        $driver = Driver::create([
+            'mobile' => '09123456789',
+            'name' => 'راننده قدیمی',
+            'mobile_verified_at' => now(),
+        ]);
+
+        $response = $this->post(route('driver.otp.request'), ['mobile' => '09123456789'])
+            ->assertRedirect(route('driver.otp.verify.show'));
+
+        $code = $response->getSession()->get('otp')['dev_code'];
+
+        $this->post(route('driver.otp.verify'), ['mobile' => '09123456789', 'code' => $code])
+            ->assertRedirect(route('driver.home'));
+
+        $this->assertAuthenticatedAs($driver->fresh(), 'driver');
+        $this->assertSame(1, Driver::count(), 'راننده‌ی موجود نباید دوباره ساخته شود.');
+
+        // صفحه‌ی بعدی هم باید با همین نشست باز شود
+        $this->get(route('driver.home'))->assertOk();
+    }
+
+    #[Test]
     public function a_wrong_code_returns_a_field_error_and_no_session(): void
     {
         $this->post(route('driver.otp.request'), ['mobile' => '09123456789']);
