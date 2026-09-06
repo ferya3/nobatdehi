@@ -60,7 +60,12 @@
  */
 @utility num {
     direction: ltr;
+    /*
+     * isolate خودش برای جداکردن عدد از متن راست‌به‌چپ کافی است و برخلاف
+     * display:inline-block، چیدمان عنصر را عوض نمی‌کند — مهم است چون این
+     * کلاس روی <td> هم استفاده می‌شود و inline-block سلول را از جدول
+     * بیرون می‌انداخت.
+     */
     unicode-bidi: isolate;
-    display: inline-block;
     font-variant-numeric: tabular-nums;
 }

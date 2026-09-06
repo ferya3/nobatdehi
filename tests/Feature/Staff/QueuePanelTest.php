@@ -120,29 +120,21 @@ final class QueuePanelTest extends TestCase
     }
 
     #[Test]
-    public function the_ceo_can_look_but_never_touch(): void
+    public function the_ceo_is_kept_out_of_the_operator_panel_entirely(): void
     {
         $appointment = $this->todayAppointment();
         $ceo = $this->staff(Roles::CEO);
 
-        $this->actingAs($ceo)->get(route('staff.queue.index'))->assertOk();
+        // دیدِ مدیرعامل از داشبورد و گزارش است، نه صف عملیاتی
+        $this->actingAs($ceo)->get(route('staff.queue.index'))->assertForbidden();
+        $this->actingAs($ceo)->get(route('staff.dashboard'))->assertOk();
 
         $this->actingAs($ceo)
-            ->from(route('staff.queue.index'))
+            ->from(route('staff.dashboard'))
             ->post(route('staff.queue.transition', $appointment), ['to' => S::Waiting->value])
             ->assertSessionHas('error');
 
         $this->assertSame(S::Booked, $appointment->fresh()->status);
-    }
-
-    #[Test]
-    public function the_ceo_is_offered_no_actions_at_all(): void
-    {
-        $this->todayAppointment();
-
-        $this->actingAs($this->staff(Roles::CEO))
-            ->get(route('staff.queue.index'))
-            ->assertInertia(fn (AssertableInertia $page) => $page->where('appointments.0.actions', []));
     }
 
     #[Test]

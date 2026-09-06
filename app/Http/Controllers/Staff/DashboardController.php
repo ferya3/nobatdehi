@@ -6,6 +6,7 @@ namespace App\Http\Controllers\Staff;
 
 use App\Domain\Access\Permissions;
 use App\Domain\Queue\QueueService;
+use App\Domain\Reporting\ReportService;
 use App\Http\Controllers\Controller;
 use App\Models\Factory;
 use App\Support\Jalali;
@@ -16,7 +17,10 @@ use Inertia\Response;
 
 class DashboardController extends Controller
 {
-    public function __construct(private readonly QueueService $queue) {}
+    public function __construct(
+        private readonly QueueService $queue,
+        private readonly ReportService $reports,
+    ) {}
 
     public function __invoke(Request $request): Response
     {
@@ -26,12 +30,18 @@ class DashboardController extends Controller
             ?? Factory::where('is_active', true)->orderBy('id')->firstOrFail();
 
         $today = CarbonImmutable::today();
+        $weekAgo = $today->subDays(6);
 
         return Inertia::render('Staff/Dashboard', [
             'jalaliDate' => Jalali::long($today),
             'counters' => $this->queue->todayCounters($factory, $today),
             'avgLoadingMinutes' => $this->queue->averageLoadingMinutes($factory, $today)
                 ?? $factory->avg_loading_minutes,
+            'week' => [
+                'summary' => $this->reports->summary($factory, $weekAgo, $today),
+                'daily' => $this->reports->daily($factory, $weekAgo, $today),
+                'byProduct' => $this->reports->byProduct($factory, $weekAgo, $today),
+            ],
         ]);
     }
 }

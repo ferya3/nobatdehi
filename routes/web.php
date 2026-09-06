@@ -8,6 +8,8 @@ use App\Http\Controllers\Staff\GateController;
 use App\Http\Controllers\Staff\HomeController;
 use App\Http\Controllers\Staff\LoginController;
 use App\Http\Controllers\Staff\QueueController;
+use App\Http\Controllers\Staff\ReportController;
+use App\Http\Controllers\Staff\SettingsController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -79,6 +81,12 @@ Route::prefix('panel')->name('staff.')->group(function () {
         Route::get('/queue/{appointment}', [QueueController::class, 'show'])->name('queue.show');
         Route::post('/queue/{appointment}/transition', [QueueController::class, 'transition'])
             ->name('queue.transition');
+
+        Route::get('/reports', [ReportController::class, 'index'])->name('reports');
+        Route::get('/reports/export', [ReportController::class, 'export'])->name('reports.export');
+
+        Route::get('/settings', [SettingsController::class, 'edit'])->name('settings.edit');
+        Route::put('/settings', [SettingsController::class, 'update'])->name('settings.update');
     });
 });
 

@@ -133,9 +133,46 @@ class DemoQueueSeeder extends Seeder
                     $status === S::Loading ? $line->id : null,
                 );
             }
+
+            $this->backdate($appointment->fresh(), $index);
         }
 
         $this->command?->info('صف نمونه‌ی امروز ساخته شد: '.count(self::DRIVERS).' نوبت.');
     }
 
+
+    /**
+     * زمان‌های واقع‌نما.
+     *
+     * seeder همه‌ی انتقال‌ها را در چند میلی‌ثانیه انجام می‌دهد، پس بدون این،
+     * «متوسط انتظار» و «متوسط بارگیری» در گزارش صفر می‌شوند و صفحه‌ی گزارش
+     * چیزی برای نشان دادن ندارد.
+     */
+    private function backdate(\App\Models\Appointment $appointment, int $index): void
+    {
+        if ($appointment->checked_in_at === null) {
+            return;
+        }
+
+        $wait = 12 + ($index * 7) % 35;          // ۱۲ تا ۴۶ دقیقه انتظار
+        $loading = 18 + ($index * 5) % 25;       // ۱۸ تا ۴۲ دقیقه بارگیری
+
+        $checkedIn = $appointment->startsAt()->addMinutes(5 + $index);
+
+        $times = ['checked_in_at' => $checkedIn];
+
+        if ($appointment->loading_started_at !== null) {
+            $times['loading_started_at'] = $checkedIn->addMinutes($wait);
+        }
+
+        if ($appointment->loading_completed_at !== null) {
+            $times['loading_completed_at'] = $checkedIn->addMinutes($wait + $loading);
+        }
+
+        if ($appointment->completed_at !== null) {
+            $times['completed_at'] = $checkedIn->addMinutes($wait + $loading + 6);
+        }
+
+        $appointment->forceFill($times)->save();
+    }
 }

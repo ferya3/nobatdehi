@@ -71,8 +71,10 @@ final class Roles
                 P::QUEUE_START_LOADING, P::QUEUE_COMPLETE_LOADING,
             ],
 
+            // مدیرعامل عمداً QUEUE_VIEW ندارد: پنل اپراتور صفحه‌ی او نیست.
+            // دید او از طریق داشبورد و گزارش است، نه صف عملیاتی.
             self::CEO => [
-                P::DASHBOARD_VIEW, P::REPORTS_VIEW, P::APPOINTMENTS_VIEW, P::QUEUE_VIEW,
+                P::DASHBOARD_VIEW, P::REPORTS_VIEW, P::APPOINTMENTS_VIEW,
             ],
         ];
     }
