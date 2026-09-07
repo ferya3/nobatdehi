@@ -420,7 +420,6 @@ set_env VITE_REVERB_HOST "$REVERB_PUBLIC_HOST"
 set_env VITE_REVERB_PORT "$REVERB_PUBLIC_PORT"
 set_env VITE_REVERB_SCHEME "$REVERB_SCHEME"
 
-set_env SMS_PROVIDER log
 set_env OTP_EXPOSE_IN_RESPONSE false
 
 chown "$APP_USER:$APP_USER" "$APP_DIR/.env"
@@ -730,10 +729,11 @@ ${BOLD}${GREEN}نصب تمام شد.${RESET}
   ${YELLOW}رمز این کاربران را همین امروز عوض کنید.${RESET}
 
   ${BOLD}قدم‌های بعدی${RESET}
-  1) پنل پیامکی: در ${APP_DIR}/.env مقدار SMS_PROVIDER=kavenegar و
-     KAVENEGAR_API_KEY را بگذارید، و شماره مدیران را در
-     SMS_MANAGER_RECIPIENTS (با کاما جدا شده).
-     تا وقتی SMS_PROVIDER=log است، پیامک‌ها فقط در لاگ نوشته می‌شوند.
+  1) پنل پیامکی را از خودِ سامانه تنظیم کنید:
+     ${APP_URL}/panel/settings/sms
+     (نام کاربری، رمز و شماره اختصاصی پنل + شماره مدیران)
+     همان‌جا دکمه‌ی «ارسال آزمایشی» و «عیب‌یابی هوشمند» هم هست.
+     تا وقتی تنظیم نشده، پیامکی ارسال نمی‌شود.
   2) بعد از هر تغییر .env:  sudo -u ${APP_USER} ${PHP_BIN} ${APP_DIR}/artisan config:cache
   3) پشتیبان‌گیری دیتابیس را تنظیم کنید — رمز دیتابیس در ${DB_PASSWORD_FILE}
 

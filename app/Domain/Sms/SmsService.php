@@ -6,6 +6,7 @@ namespace App\Domain\Sms;
 
 use App\Domain\Sms\Exceptions\SmsSendFailed;
 use App\Jobs\SendSmsMessage;
+use App\Models\Setting;
 use App\Models\SmsMessage;
 use App\Models\SmsTemplate;
 use App\Support\Mobile;
@@ -19,7 +20,7 @@ use Illuminate\Database\Eloquent\Model;
  */
 final class SmsService
 {
-    public function __construct(private readonly SmsProvider $provider) {}
+    public function __construct(private readonly SmsManager $manager) {}
 
     /** ارسال با قالب ذخیره‌شده در دیتابیس */
     public function queueTemplate(string $templateKey, string $to, array $variables = [], ?Model $related = null): ?SmsMessage
@@ -43,7 +44,7 @@ final class SmsService
 
         $message = new SmsMessage([
             'to' => $normalized,
-            'body' => $body,
+            'body' => $this->withOptOut($body),
             'template_key' => $templateKey,
             'status' => 'QUEUED',
         ]);
@@ -62,25 +63,47 @@ final class SmsService
     /** ارسال واقعی — فقط از داخل Job صدا زده می‌شود */
     public function dispatchNow(SmsMessage $message): void
     {
-        try {
-            $providerId = $this->provider->send($message->to, $message->body);
+        $settings = Setting::values();
 
-            $message->forceFill([
-                'status' => 'SENT',
-                'provider' => $this->provider->name(),
-                'provider_message_id' => $providerId ?: null,
-                'sent_at' => now(),
-                'error' => null,
-            ])->save();
-        } catch (SmsSendFailed $e) {
+        // پنل تنظیم‌نشده با تلاش مجدد درست نمی‌شود؛ یک‌بار ثبت و تمام.
+        if ($reason = $this->manager->configurationError($settings)) {
             $message->forceFill([
                 'status' => 'FAILED',
-                'provider' => $this->provider->name(),
-                'error' => $e->getMessage(),
+                'provider' => (string) ($settings['sms_provider'] ?? ''),
+                'error' => $reason,
             ])->save();
 
-            throw $e;
+            return;
         }
+
+        [$status, $detail] = $this->manager->send($settings, $message->to, $message->body);
+
+        $message->forceFill([
+            'status' => match ($status) {
+                SmsManager::STATUS_SENT => 'SENT',
+                SmsManager::STATUS_DISABLED => 'DISABLED',
+                default => 'FAILED',
+            },
+            'provider' => (string) ($settings['sms_provider'] ?? ''),
+            'error' => $status === SmsManager::STATUS_SENT ? null : $detail,
+            'sent_at' => $status === SmsManager::STATUS_SENT ? now() : null,
+        ])->save();
+
+        // خاموش‌بودن پیامک در تنظیمات خطا نیست؛ تلاش دوباره هم بی‌فایده است.
+        if ($status === SmsManager::STATUS_FAILED) {
+            throw new SmsSendFailed($detail);
+        }
+    }
+
+    /**
+     * متن نهایی پیام: خط «لغو» تنظیمات به انتهای هر پیام اضافه می‌شود،
+     * همان‌طور که در payroll-saas انجام می‌شود.
+     */
+    private function withOptOut(string $body): string
+    {
+        $optOut = trim(Setting::get('sms_optout'));
+
+        return $optOut === '' ? $body : $body."\n".$optOut;
     }
 
     /** جای‌گذاری {متغیر}ها در متن قالب */

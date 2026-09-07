@@ -10,6 +10,7 @@ use App\Http\Controllers\Staff\LoginController;
 use App\Http\Controllers\Staff\QueueController;
 use App\Http\Controllers\Staff\ReportController;
 use App\Http\Controllers\Staff\SettingsController;
+use App\Http\Controllers\Staff\SmsSettingsController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -87,6 +88,11 @@ Route::prefix('panel')->name('staff.')->group(function () {
 
         Route::get('/settings', [SettingsController::class, 'edit'])->name('settings.edit');
         Route::put('/settings', [SettingsController::class, 'update'])->name('settings.update');
+
+        Route::get('/settings/sms', [SmsSettingsController::class, 'edit'])->name('settings.sms');
+        Route::put('/settings/sms', [SmsSettingsController::class, 'update'])->name('settings.sms.update');
+        Route::post('/settings/sms/test', [SmsSettingsController::class, 'test'])->name('settings.sms.test');
+        Route::post('/settings/sms/probe', [SmsSettingsController::class, 'probe'])->name('settings.sms.probe');
     });
 });
 

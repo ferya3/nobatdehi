@@ -18,6 +18,7 @@ use App\Listeners\NotifyDriverWhenCalled;
 use App\Listeners\NotifyDriverWhenCancelled;
 use App\Listeners\NotifyOnAppointmentCreated;
 use App\Models\Appointment;
+use App\Models\Setting;
 use App\Models\SmsMessage;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -38,6 +39,9 @@ final class AppointmentNotificationsTest extends TestCase
         $this->factory = $this->seedFactory();
         $this->seed(\Database\Seeders\UserSeeder::class);
         $this->seed(\Database\Seeders\SmsTemplateSeeder::class);
+
+        // در تست، پنل واقعی صدا زده نمی‌شود
+        Setting::putMany(['sms_provider' => 'console']);
     }
 
     private function book(string $mobile = '09123456789'): Appointment
@@ -66,7 +70,7 @@ final class AppointmentNotificationsTest extends TestCase
     #[Test]
     public function the_driver_and_the_manager_both_get_an_sms_for_a_new_appointment(): void
     {
-        config()->set('sms.manager_recipients', ['09120000099']);
+        Setting::putMany(['sms_manager_recipients' => '09120000099']);
 
         // صف در تست sync است، پس Listener واقعی خودش اجرا می‌شود
         $appointment = $this->book();
