@@ -204,6 +204,27 @@ check_output "ستون‌های زمانی نوع کامیون هست" \
     "$PHP_BIN artisan tinker --execute='echo Schema::hasColumn(\"truck_types\",\"grace_minutes\") ? \"HAS-IT\" : \"MISSING\";'" \
     "HAS-IT"
 
+# --- دستگاه‌های گیت: بارکدخوان و دوربین پلاک‌خوان ---
+
+check_output "صفحه‌ی دستگاه‌های گیت ثبت شده" \
+    "$PHP_BIN artisan route:list --name=staff.settings.devices" "panel/settings/devices"
+
+# مسیر دوربین پلاک‌خوان باید در route:cache باشد، وگرنه دوربین ۴۰۴ می‌گیرد
+# و کسی تا روزی که دنبال عکسِ یک ورود بگردد متوجه نمی‌شود.
+check_output "مسیر دریافت از دوربین پلاک‌خوان ثبت شده" \
+    "$PHP_BIN artisan route:list --name=api.gate.anpr" "api/gate/anpr"
+
+check_output "جدول خواندن‌های پلاک ساخته شده" \
+    "$PHP_BIN artisan tinker --execute='echo Schema::hasTable(\"plate_readings\") ? \"HAS-IT\" : \"MISSING\";'" \
+    "HAS-IT"
+
+check_output "ستون مرجع تأیید پلاک هست" \
+    "$PHP_BIN artisan tinker --execute='echo Schema::hasColumn(\"appointments\",\"gate_plate_source\") ? \"HAS-IT\" : \"MISSING\";'" \
+    "HAS-IT"
+
+# --help اجرا نمی‌کند، فقط وجودش را ثابت می‌کند — این فرمان پاک می‌کند
+check "فرمان پاک‌سازی خواندن‌های پلاک موجود است" "$PHP_BIN artisan plate-readings:prune --help"
+
 ASSET_AGE="$(( $(date +%s) - $(stat -c %Y "$APP_DIR/public/build/manifest.json" 2>/dev/null || echo 0) ))"
 
 if [[ "$SKIP_BUILD" == "no" && "$ASSET_AGE" -gt 600 ]]; then
@@ -229,6 +250,20 @@ cat <<'NOTE'
     Ctrl+Shift+R (روی موبایل: بستن و باز کردن دوباره‌ی صفحه) لازم است تا
     نسخه‌ی تازه برداشته شود.
 
-    صفحه‌های جدید:  /panel/products   و   /panel/truck-types
-    (با کاربری که دسترسی «مدیریت محصولات» دارد — مثلاً مدیر کارخانه)
+    این نسخه: دستگاه‌های گیت — بارکدخوان و دوربین پلاک‌خوان
+
+    /panel/settings/devices  (با دسترسی «تنظیمات» — مثلاً مدیر کارخانه)
+
+    بارکدخوان و دوربین عکس پلاک از همان ابتدا روشن‌اند و چیزی نمی‌خواهند.
+    برای دوربین پلاک‌خوان شبکه‌ای، در همان صفحه:
+
+      ۱. «دریافت خواندن از دوربین» را تیک بزنید و ذخیره کنید
+      ۲. «ساخت توکن» را بزنید — توکن فقط همان یک بار نشان داده می‌شود
+      ۳. آدرس و توکن را در تنظیمات خودِ دوربین بگذارید
+
+    تا وقتی مرحله‌ی ۱ انجام نشود، مسیر دوربین عمداً ۴۰۴ می‌دهد.
+
+    عکس‌های پلاک روی دیسک خصوصی می‌نشینند (storage/app/private/plates)، پس
+    فضای دیسک را بپایید. خواندن‌هایی که به نوبتی وصل نیستند هر شب ساعت ۰۳:۳۰
+    بعد از مدت نگهداری پاک می‌شوند — پیش‌فرض ۳۰ روز، از همان صفحه قابل تغییر.
 NOTE
