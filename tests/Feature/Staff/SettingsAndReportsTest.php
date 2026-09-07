@@ -29,7 +29,7 @@ final class SettingsAndReportsTest extends TestCase
     {
         parent::setUp();
         $this->factory = $this->seedFactory();
-        $this->seed(\Database\Seeders\UserSeeder::class);
+        $this->seedStaff();
     }
 
     private function staff(string $role): User

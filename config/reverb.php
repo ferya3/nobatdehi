@@ -29,7 +29,9 @@ return [
     'servers' => [
 
         'reverb' => [
-            'host' => env('REVERB_SERVER_HOST', '0.0.0.0'),
+            // فقط لوپ‌بک: Reverb از پشت Nginx سرو می‌شود و TLS آنجاست.
+            // 0.0.0.0 یعنی WebSocket بدون رمزنگاری مستقیم از شبکه در دسترس.
+            'host' => env('REVERB_SERVER_HOST', '127.0.0.1'),
             'port' => env('REVERB_SERVER_PORT', 8080),
             'path' => env('REVERB_SERVER_PATH', ''),
             'hostname' => env('REVERB_HOST'),

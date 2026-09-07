@@ -119,7 +119,7 @@ final class ScaleBridgeTest extends TestCase
 
         $this->postJson(route('api.weighbridge.reading'), ['scale' => 'ورودی', 'weight_kg' => 14500], [
             VerifyDeviceToken::HEADER => 'not-the-token',
-        ])->assertUnauthorized();
+        ])->assertNotFound();
 
         $this->assertSame(0, ScaleReading::count());
 
@@ -139,7 +139,7 @@ final class ScaleBridgeTest extends TestCase
 
         $this->postJson(route('api.weighbridge.reading'), ['scale' => 'ورودی', 'weight_kg' => 14500], [
             VerifyDeviceToken::HEADER => 'the-camera-token',
-        ])->assertUnauthorized();
+        ])->assertNotFound();
 
         $this->assertSame(0, ScaleReading::count());
     }

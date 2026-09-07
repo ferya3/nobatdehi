@@ -28,9 +28,22 @@
 ## نصب روی سرور (Ubuntu 24.04)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ferya3/nobatdehi/claude/system-architecture-b9hlgv/install.sh \
-  | sudo bash -s -- --domain factory.ir --email you@example.com
+BRANCH=claude/system-architecture-b9hlgv
+BASE=https://raw.githubusercontent.com/ferya3/nobatdehi/$BRANCH
+
+curl -fsSL -o install.sh      "$BASE/install.sh"
+curl -fsSL -o install.sh.sha256 "$BASE/install.sh.sha256"
+
+sha256sum -c install.sh.sha256 || { echo 'اسکریپت دستکاری شده — اجرا نکنید'; exit 1; }
+
+less install.sh                      # یک بار نگاهش کنید
+sudo bash install.sh --domain factory.ir --email you@example.com
 ```
+
+> **چرا `curl | sudo bash` نه.** آن دستور کدی را با دسترسی root اجرا می‌کند
+> که هیچ‌کس ندیده و هیچ‌چیز تأییدش نکرده؛ اگر ریپو یا CDN یک بار دستکاری
+> شود، کل سرور رفته است. `install.sh.sha256` کنار اسکریپت در همین ریپو است و
+> با هر تغییر به‌روز می‌شود.
 
 دامنه باید از قبل به IP سرور اشاره کند، وگرنه گرفتن گواهی HTTPS شکست می‌خورد
 (بقیه‌ی نصب انجام می‌شود و بعداً می‌شود `sudo certbot --nginx -d factory.ir` زد).
@@ -163,6 +176,7 @@ php artisan schedule:work
 | `appointments:expire` | ۰۰:۲۰ | بستن نوبت‌های سررسیدگذشته و آزادسازی ظرفیت |
 | `appointments:no-show` | هر ۵ دقیقه | ثبت عدم حضور برای نوبت‌هایی که مهلت حضورشان گذشته |
 | `loading:alert-delays` | هر ۱۰ دقیقه | هشدار پیامکی تأخیر بارگیری به مدیران |
+| `security:alert` | هر ۱۵ دقیقه | هشدار الگوهای مشکوک در لاگ امنیتی |
 | `plate-readings:prune` | ۰۳:۳۰ | پاک‌کردن خواندن‌ها و عکس‌های پلاکِ قدیمی |
 | `scale-readings:prune` | ۰۳:۴۰ | پاک‌کردن عددهای قدیمیِ باسکول |
 
@@ -186,6 +200,15 @@ php artisan schedule:work
 
 راننده یک QR دارد و همان را در هر سه ایستگاه نشان می‌دهد؛ هر ایستگاه از روی
 وضعیت نوبت می‌فهمد این اسکن چه معنایی دارد.
+
+**سخت‌سازی امنیتی.** `TRUSTED_PROXIES` پیش‌فرض فقط همین ماشین است (نه `*`)،
+نشست رمزنگاری می‌شود، توکن دستگاه فقط از هدر خوانده می‌شود، Reverb روی
+لوپ‌بک است، Redis رمز دارد، و هدرهای CSP/HSTS/Permissions-Policy از کد
+می‌آیند نه از Nginx.
+
+کاربران پنل با **رمز تصادفی** ساخته می‌شوند (یک بار موقع نصب چاپ می‌شود) و
+تا عوضش نکنند هیچ صفحه‌ای باز نمی‌شود. `security:alert` هر ۱۵ دقیقه الگوهای
+مشکوک لاگ امنیتی را به مدیران پیامک می‌کند.
 
 **استثنای گیت.** `gate.manual-override` دسترسی جداگانه‌ای است که نگهبان
 ندارد و مدیر کارخانه دارد. استفاده‌اش دلیل کتبی می‌خواهد و در لاگ امنیتی

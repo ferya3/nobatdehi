@@ -6,8 +6,8 @@ namespace Tests\Support;
 
 use App\Domain\Appointment\Data\NewAppointment;
 use App\Domain\Slot\SlotGenerator;
-use App\Domain\Weighbridge\ExitPermit;
 use App\Domain\Truck\PlateNumber;
+use App\Domain\Weighbridge\ExitPermit;
 use App\Models\Appointment;
 use App\Models\AppointmentSlot;
 use App\Models\Driver;
@@ -15,9 +15,11 @@ use App\Models\Factory;
 use App\Models\LoadingRecord;
 use App\Models\Product;
 use App\Models\Truck;
+use App\Models\User;
 use Carbon\CarbonImmutable;
 use Database\Seeders\FactorySeeder;
 use Database\Seeders\RoleSeeder;
+use Database\Seeders\UserSeeder;
 
 trait SeedsFactory
 {
@@ -27,6 +29,20 @@ trait SeedsFactory
         $this->seed(FactorySeeder::class);
 
         return Factory::where('slug', 'main')->firstOrFail();
+    }
+
+    /**
+     * کاربران نمونه، آماده‌ی کار.
+     *
+     * UserSeeder عمداً پرچم «رمز را عوض کن» را می‌گذارد و تا عوض نشود پنل
+     * باز نمی‌شود. تست‌هایی که رفتار خودِ پنل را می‌سنجند نباید هر کدام این
+     * مرحله را از نو طی کنند؛ تستِ اختصاصیِ همان اجبار جداست.
+     */
+    protected function seedStaff(): void
+    {
+        $this->seed(UserSeeder::class);
+
+        User::query()->update(['must_change_password' => false]);
     }
 
     protected function makeDriver(string $mobile): Driver
@@ -44,11 +60,11 @@ trait SeedsFactory
     {
         $date = CarbonImmutable::tomorrow();
 
-        while ((new SlotGenerator())->planFor($factory, $date) === null) {
+        while ((new SlotGenerator)->planFor($factory, $date) === null) {
             $date = $date->addDay();
         }
 
-        (new SlotGenerator())->generateForDate($factory, $date);
+        (new SlotGenerator)->generateForDate($factory, $date);
 
         return AppointmentSlot::where('factory_id', $factory->id)
             ->whereDate('date', $date->toDateString())
@@ -67,7 +83,7 @@ trait SeedsFactory
     {
         $date = CarbonImmutable::today();
 
-        while ((new SlotGenerator())->planFor($factory, $date) === null) {
+        while ((new SlotGenerator)->planFor($factory, $date) === null) {
             $date = $date->addDay();
         }
 
@@ -83,7 +99,7 @@ trait SeedsFactory
     {
         $today = CarbonImmutable::today();
 
-        (new SlotGenerator())->generateForDate($factory, $today);
+        (new SlotGenerator)->generateForDate($factory, $today);
 
         $earliest = CarbonImmutable::now()->addMinutes((int) $factory->booking_lead_minutes);
 

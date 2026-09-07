@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Middleware\HandleInertiaRequests;
+use App\Http\Middleware\SecurityHeaders;
+use App\Support\TrustedProxies;
 use App\Http\Middleware\VerifyDeviceToken;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -22,7 +24,25 @@ return Application::configure(basePath: dirname(__DIR__))
             AddLinkHeadersForPreloadedAssets::class,
         ]);
 
-        $middleware->trustProxies(at: '*');
+        /*
+         * فقط پروکسی‌های واقعی مورد اعتمادند.
+         *
+         * '*' یعنی هر کسی می‌تواند X-Forwarded-For جعل کند و آن‌وقت
+         * rate limit روی IP، لاگ امنیتی و مسدودسازی همگی به یک عدد دلخواه
+         * نگاه می‌کنند. پیش‌فرض همان چیزی است که نصب‌کننده می‌سازد: Nginx
+         * روی همین ماشین. پشت Cloudflare یا لود بالانسر، TRUSTED_PROXIES را
+         * روی رنج واقعی آن‌ها بگذارید.
+         */
+        $middleware->trustProxies(
+            at: TrustedProxies::from(env('TRUSTED_PROXIES')),
+            headers: Request::HEADER_X_FORWARDED_FOR
+                | Request::HEADER_X_FORWARDED_HOST
+                | Request::HEADER_X_FORWARDED_PORT
+                | Request::HEADER_X_FORWARDED_PROTO,
+        );
+
+        // هدرهای امنیتی روی هر پاسخ — نه فقط جایی که Nginx یادش بماند
+        $middleware->append(SecurityHeaders::class);
 
         // دوربین پلاک‌خوان و پل باسکول کاربر نیستند و session ندارند؛
         // توکن دستگاه دارند. پارامتر می‌گوید کدام دستگاه: device:gate یا device:scale

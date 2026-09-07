@@ -24,7 +24,7 @@ final class SmsSettingsPanelTest extends TestCase
     {
         parent::setUp();
         $this->seedFactory();
-        $this->seed(\Database\Seeders\UserSeeder::class);
+        $this->seedStaff();
     }
 
     private function manager(): User

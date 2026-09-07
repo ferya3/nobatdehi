@@ -33,34 +33,43 @@ class VerifyDeviceToken
     public function handle(Request $request, Closure $next, string $kind): Response
     {
         if (! DeviceTokens::isKind($kind)) {
-            return $this->deny($request, $kind, 'unknown_kind', 'نوع دستگاه ناشناخته است.', 404);
+            return $this->deny($request, $kind, 'unknown_kind');
         }
 
         // خاموش که باشد، مسیر اصلاً وجود ندارد — وجودِ مسیر هم اطلاعات است
+        /*
+         * پاسخِ «خاموش است» و «توکن غلط است» عمداً یکی است.
+         *
+         * تفاوت رفتاری بین این دو، به کسی که از بیرون امتحان می‌کند
+         * می‌گوید کدام مسیر واقعاً وجود دارد و کدام دستگاه روشن است. دلیل
+         * واقعی در لاگ امنیتی می‌ماند، نه در پاسخ.
+         */
         if (! $this->tokens->enabled($kind)) {
-            return $this->deny($request, $kind, 'disabled', 'این اتصال فعال نیست.', 404);
+            return $this->deny($request, $kind, 'disabled');
         }
 
         if (! $this->tokens->matches($kind, $this->tokenFrom($request))) {
-            return $this->deny($request, $kind, 'bad_token', 'توکن دستگاه معتبر نیست.', 401);
+            return $this->deny($request, $kind, 'bad_token');
         }
 
         return $next($request);
     }
 
     /**
-     * دستگاه‌ها یکسان نیستند: بعضی هدر اختصاصی می‌فرستند، بعضی فقط
-     * Authorization: Bearer دارند و بعضی جز query string چیزی نمی‌دهند.
+     * فقط هدر — هرگز query string.
+     *
+     * توکنی که در URL بیاید در لاگ دسترسی Nginx، در history مرورگر و در
+     * هدر Referer به مقصد بعدی می‌نشیند. دستگاهی که فقط query می‌فرستد
+     * باید عوض شود، نه اینکه سامانه به آن تن بدهد.
      */
     private function tokenFrom(Request $request): ?string
     {
         return $request->header(self::HEADER)
             ?? $request->header(self::GATE_HEADER)
-            ?? $request->bearerToken()
-            ?? $request->query('token');
+            ?? $request->bearerToken();
     }
 
-    private function deny(Request $request, string $kind, string $reason, string $message, int $status): JsonResponse
+    private function deny(Request $request, string $kind, string $reason): JsonResponse
     {
         $this->security->log(
             SecurityLogger::PERMISSION_DENIED,
@@ -69,6 +78,6 @@ class VerifyDeviceToken
             request: $request,
         );
 
-        return response()->json(['message' => $message], $status);
+        return response()->json(['message' => 'یافت نشد.'], 404);
     }
 }

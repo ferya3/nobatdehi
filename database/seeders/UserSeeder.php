@@ -8,6 +8,7 @@ use App\Domain\Access\Roles;
 use App\Models\Factory;
 use App\Models\User;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Str;
 
 class UserSeeder extends Seeder
 {
@@ -25,19 +26,59 @@ class UserSeeder extends Seeder
             ['name' => 'مدیرعامل', 'email' => 'ceo@example.test', 'mobile' => '09120000007', 'role' => Roles::CEO],
         ];
 
+        $created = [];
+
         foreach ($users as $data) {
-            $user = User::updateOrCreate(
-                ['email' => $data['email']],
-                [
-                    'factory_id' => $factory->id,
-                    'name' => $data['name'],
-                    'mobile' => $data['mobile'],
-                    'password' => 'password',
-                    'is_active' => true,
-                ],
-            );
+            $user = User::firstOrNew(['email' => $data['email']]);
+
+            /*
+             * رمز فقط موقع ساخت نوشته می‌شود.
+             *
+             * این seeder در هر به‌روزرسانی دوباره اجرا می‌شود؛ اگر رمز را هر
+             * بار بازنویسی کند، رمزی که مدیر خودش گذاشته پاک می‌شود و
+             * سامانه بی‌سروصدا به یک رمز ناشناخته برمی‌گردد.
+             */
+            if (! $user->exists) {
+                $password = Str::password(16, symbols: false);
+
+                $user->password = $password;
+                $user->must_change_password = true;
+
+                $created[$data['email']] = $password;
+            }
+
+            $user->fill([
+                'factory_id' => $factory->id,
+                'name' => $data['name'],
+                'mobile' => $data['mobile'],
+                'is_active' => true,
+            ])->save();
 
             $user->syncRoles([$data['role']]);
         }
+
+        $this->report($created);
+    }
+
+    /**
+     * رمزهای تازه یک بار چاپ می‌شوند و تمام.
+     *
+     * @param  array<string, string>  $created
+     */
+    private function report(array $created): void
+    {
+        if ($created === []) {
+            return;
+        }
+
+        $this->command?->newLine();
+        $this->command?->warn('رمز اولیه‌ی کاربران — همین حالا یادداشت کنید، دوباره نشان داده نمی‌شود:');
+
+        foreach ($created as $email => $password) {
+            $this->command?->line("  {$email}  {$password}");
+        }
+
+        $this->command?->newLine();
+        $this->command?->info('هر کاربر در اولین ورود مجبور به تغییر رمز می‌شود.');
     }
 }

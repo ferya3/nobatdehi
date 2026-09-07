@@ -359,6 +359,31 @@ step "آماده‌سازی Redis"
 
 svc enable-now redis-server
 
+# Redis بدون رمز روی لوپ‌بک هم یعنی هر فرایندی روی این ماشین می‌تواند
+# session و کش را بخواند. رمز یک بار ساخته می‌شود و بعد دست نمی‌خورد.
+REDIS_CONF="/etc/redis/redis.conf"
+REDIS_PASS=""
+
+if [[ -f "$REDIS_CONF" ]]; then
+    REDIS_PASS="$(grep -oP '^\s*requirepass\s+\K\S+' "$REDIS_CONF" 2>/dev/null | tail -1 || true)"
+
+    if [[ -z "$REDIS_PASS" ]]; then
+        REDIS_PASS="$(openssl rand -hex 24)"
+
+        # بایند هم به لوپ‌بک محدود می‌شود؛ نصب پیش‌فرض اوبونتو همین است
+        # ولی روی سرورهایی که کسی دستکاری کرده باید مطمئن شویم.
+        sed -i 's/^\s*#\?\s*requirepass .*/requirepass '"$REDIS_PASS"'/' "$REDIS_CONF"
+        grep -q '^requirepass ' "$REDIS_CONF" || printf '\nrequirepass %s\n' "$REDIS_PASS" >> "$REDIS_CONF"
+
+        sed -i 's/^\s*bind .*/bind 127.0.0.1 ::1/' "$REDIS_CONF"
+
+        svc restart redis-server
+        info "رمز Redis ساخته شد و فقط روی لوپ‌بک گوش می‌دهد."
+    else
+        info "Redis از قبل رمز داشت؛ دست نخورد."
+    fi
+fi
+
 # ---------------------------------------------------------------- .env
 
 step "تنظیم فایل .env"
@@ -398,8 +423,15 @@ set_env CACHE_STORE redis
 set_env SESSION_DRIVER redis
 set_env QUEUE_CONNECTION redis
 set_env REDIS_CLIENT phpredis
+if [[ -n "$REDIS_PASS" ]]; then
+    set_env REDIS_PASSWORD "$REDIS_PASS"
+fi
 
 set_env BROADCAST_CONNECTION reverb
+
+# نشست رمزنگاری‌شده و پروکسیِ محدود — پیش‌فرض‌های امنِ همین نصب
+set_env SESSION_ENCRYPT true
+set_env TRUSTED_PROXIES "127.0.0.1,::1"
 
 # کلیدهای Reverb فقط یک‌بار ساخته می‌شوند؛ عوض‌شدنشان همه‌ی
 # اتصال‌های باز را قطع می‌کند.
@@ -413,6 +445,8 @@ set_env REVERB_HOST 127.0.0.1
 set_env REVERB_PORT 8080
 set_env REVERB_SERVER_HOST 0.0.0.0
 set_env REVERB_SERVER_PORT 8080
+# Reverb از پشت Nginx سرو می‌شود؛ مستقیم روی شبکه گوش نمی‌دهد
+set_env REVERB_SERVER_HOST 127.0.0.1
 
 # مرورگر از پشت Nginx وصل می‌شود، پس میزبان و پورت عمومی فرق دارند
 set_env VITE_REVERB_APP_KEY '${REVERB_APP_KEY}'
@@ -682,12 +716,25 @@ fi
 
 # --------------------------------------------------------------- فایروال
 
-UFW_STATUS="$(command -v ufw >/dev/null && ufw status 2>/dev/null || true)"
-
-if grep -q "Status: active" <<<"$UFW_STATUS"; then
+if command -v ufw >/dev/null 2>&1; then
     step "تنظیم فایروال"
-    ufw allow 'Nginx Full' >/dev/null
-    info "پورت‌های ۸۰ و ۴۴۳ باز شدند. پورت ۸۰۸۰ (Reverb) عمداً بسته می‌ماند؛ از پشت Nginx سرو می‌شود."
+
+    UFW_STATUS="$(ufw status 2>/dev/null || true)"
+
+    ufw allow OpenSSH >/dev/null 2>&1 || true
+    ufw allow 'Nginx Full' >/dev/null 2>&1 || true
+
+    if grep -q "Status: active" <<<"$UFW_STATUS"; then
+        info "فایروال از قبل فعال بود؛ قوانین به‌روز شد."
+    else
+        # فایروال خاموش روی سرور تازه یعنی هر پورتی که سهواً باز بماند از
+        # اینترنت در دسترس است — از جمله ۵۴۳۲ و ۶۳۷۹ و ۸۰۸۰.
+        # SSH قبل از فعال‌سازی باز شده تا ارتباط قطع نشود.
+        ufw --force enable >/dev/null 2>&1 || warn "فعال‌کردن فایروال ممکن نشد."
+        info "فایروال فعال شد: فقط SSH و ۸۰/۴۴۳ باز است."
+    fi
+
+    info "۸۰۸۰ (Reverb)، ۵۴۳۲ (PostgreSQL) و ۶۳۷۹ (Redis) بسته می‌مانند؛ همه از لوپ‌بک سرو می‌شوند."
 fi
 
 # ----------------------------------------------------------------- پایان

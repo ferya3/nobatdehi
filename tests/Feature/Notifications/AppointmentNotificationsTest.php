@@ -37,7 +37,7 @@ final class AppointmentNotificationsTest extends TestCase
     {
         parent::setUp();
         $this->factory = $this->seedFactory();
-        $this->seed(\Database\Seeders\UserSeeder::class);
+        $this->seedStaff();
         $this->seed(\Database\Seeders\SmsTemplateSeeder::class);
 
         // در تست، پنل واقعی صدا زده نمی‌شود

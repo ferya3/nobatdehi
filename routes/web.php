@@ -11,11 +11,13 @@ use App\Http\Controllers\Staff\DeviceSettingsController;
 use App\Http\Controllers\Staff\HomeController;
 use App\Http\Controllers\Staff\LoadingController;
 use App\Http\Controllers\Staff\LoginController;
+use App\Http\Controllers\Staff\PasswordController;
 use App\Http\Controllers\Staff\QueueController;
 use App\Http\Controllers\Staff\ReportController;
 use App\Http\Controllers\Staff\SettingsController;
 use App\Http\Controllers\Staff\SmsSettingsController;
 use App\Http\Controllers\Staff\WeighbridgeController;
+use App\Http\Middleware\RequirePasswordChange;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -71,9 +73,13 @@ Route::prefix('panel')->name('staff.')->group(function () {
             ->name('login.store');
     });
 
-    Route::middleware('auth:web')->group(function () {
+    Route::middleware(['auth:web', RequirePasswordChange::class])->group(function () {
         Route::get('/', HomeController::class)->name('home');
         Route::post('/logout', [LoginController::class, 'destroy'])->name('logout');
+
+        // تا رمز پیش‌فرض عوض نشود، RequirePasswordChange بقیه را می‌بندد
+        Route::get('/password', [PasswordController::class, 'edit'])->name('password.edit');
+        Route::put('/password', [PasswordController::class, 'update'])->name('password.update');
 
         Route::get('/dashboard', DashboardController::class)->name('dashboard');
 

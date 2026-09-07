@@ -24,7 +24,7 @@ final class HorizonAccessTest extends TestCase
     {
         parent::setUp();
         $this->seedFactory();
-        $this->seed(\Database\Seeders\UserSeeder::class);
+        $this->seedStaff();
     }
 
     #[Test]

@@ -64,7 +64,7 @@ final class AnprIngestTest extends TestCase
 
         $this->postJson(route('api.gate.anpr'), ['plate' => '12ب34511'], [
             VerifyDeviceToken::GATE_HEADER => 'not-the-token',
-        ])->assertUnauthorized();
+        ])->assertNotFound();
 
         $this->assertSame(0, PlateReading::count());
 

@@ -2,7 +2,10 @@
 #
 # به‌روزرسانی سامانه نوبت‌دهی بارگیری روی سروری که قبلاً install.sh نصبش کرده
 #
-#   curl -fsSL https://raw.githubusercontent.com/ferya3/nobatdehi/claude/system-architecture-b9hlgv/update.sh | sudo bash
+#   BASE=https://raw.githubusercontent.com/ferya3/nobatdehi/claude/system-architecture-b9hlgv
+#   curl -fsSL -o update.sh "$BASE/update.sh"
+#   curl -fsSL -o update.sh.sha256 "$BASE/update.sh.sha256"
+#   sha256sum -c update.sh.sha256 && sudo bash update.sh
 #
 # چرا این اسکریپت لازم است و «git pull» کافی نیست:
 #
@@ -241,6 +244,45 @@ check_output "ارجاع وزن به خواندن باسکول هست" \
     "HAS-IT"
 
 check "فرمان پاک‌سازی عددهای باسکول موجود است" "$PHP_BIN artisan scale-readings:prune --help"
+
+# --- سخت‌سازی امنیتی این نسخه ---
+
+check_output "اجبار تغییر رمز پیش‌فرض فعال است" \
+    "$PHP_BIN artisan tinker --execute='echo Schema::hasColumn(\"users\",\"must_change_password\") ? \"HAS-IT\" : \"MISSING\";'" \
+    "HAS-IT"
+
+check "فرمان هشدار امنیتی موجود است" "$PHP_BIN artisan security:alert --dry-run"
+
+if grep -q '^SESSION_ENCRYPT=true' "$APP_DIR/.env"; then
+    ok "✓ نشست رمزنگاری‌شده است"
+else
+    warn "✗ SESSION_ENCRYPT در .env روی true نیست"
+    FAILED=1
+fi
+
+if grep -qE '^TRUSTED_PROXIES=.+' "$APP_DIR/.env"; then
+    if grep -q '^TRUSTED_PROXIES=\*' "$APP_DIR/.env"; then
+        warn "! TRUSTED_PROXIES روی '*' است — هر کسی می‌تواند IP خود را جعل کند"
+    else
+        ok "✓ پروکسی‌های مورد اعتماد محدود شده‌اند"
+    fi
+else
+    warn "✗ TRUSTED_PROXIES در .env تنظیم نشده"
+    FAILED=1
+fi
+
+if grep -q '^REVERB_SERVER_HOST=127.0.0.1' "$APP_DIR/.env"; then
+    ok "✓ Reverb فقط روی لوپ‌بک گوش می‌دهد"
+else
+    warn "✗ REVERB_SERVER_HOST روی 127.0.0.1 نیست — WebSocket ممکن است مستقیم از شبکه در دسترس باشد"
+    FAILED=1
+fi
+
+STAFF_DEFAULT="$(as_app "$PHP_BIN artisan tinker --execute='echo App\Models\User::where(\"must_change_password\", true)->count();'" 2>/dev/null | tr -dc '0-9' || true)"
+
+if [[ -n "$STAFF_DEFAULT" && "$STAFF_DEFAULT" != "0" ]]; then
+    warn "! ${STAFF_DEFAULT} کاربر هنوز رمز اولیه دارند و در اولین ورود مجبور به تغییرند."
+fi
 
 ASSET_AGE="$(( $(date +%s) - $(stat -c %Y "$APP_DIR/public/build/manifest.json" 2>/dev/null || echo 0) ))"
 

@@ -19,3 +19,6 @@ Schedule::command('plate-readings:prune')->dailyAt('03:30')->withoutOverlapping(
 
 // پل باسکول هر تغییر وزن را می‌فرستد؛ بیشترشان لحظه‌ی بالا رفتن روی سکو هستند
 Schedule::command('scale-readings:prune')->dailyAt('03:40')->withoutOverlapping();
+
+// لاگ امنیتی تا وقتی کسی نگاهش نکند فقط یک جدول است
+Schedule::command('security:alert')->everyFifteenMinutes()->withoutOverlapping();
