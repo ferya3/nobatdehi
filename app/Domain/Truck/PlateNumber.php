@@ -63,6 +63,43 @@ final class PlateNumber implements JsonSerializable, Stringable
         }
     }
 
+    /**
+     * خواندنِ پلاک‌خوان را به همان کلیدی تبدیل می‌کند که در دیتابیس است.
+     *
+     * دستگاه‌ها یکسان نمی‌نویسند: «۱۲ب۳۴۵ایران۶۷»، «12 ب 345 - 67»،
+     * «12ب34567». همه‌ی این‌ها باید به یک کلید برسند، وگرنه هر خواندنِ درست
+     * هم «مغایرت پلاک» می‌شود و کل قانون بی‌اثر.
+     *
+     * اگر رشته اصلاً پلاک نباشد null برمی‌گردد — که در گیت یعنی مغایرت.
+     */
+    public static function normalizeKey(?string $raw): ?string
+    {
+        if ($raw === null || trim($raw) === '') {
+            return null;
+        }
+
+        $text = Digits::toLatin(trim($raw));
+
+        // «ایران» و جداکننده‌ها حذف می‌شوند تا فقط ارقام و حرف بماند
+        $text = str_replace(['ايران', 'ایران', 'IRAN', 'Iran', 'iran'], ' ', $text);
+        $text = str_replace(['-', '_', '.', '،', ',', '|', '/', '\\'], ' ', $text);
+        $text = trim(preg_replace('/\s+/u', ' ', $text) ?? $text);
+
+        // «الف» و «معلولین» چندحرفی‌اند و باید قبل از حروف تک‌کاراکتری بیایند
+        $letters = self::LETTERS;
+        usort($letters, static fn (string $a, string $b) => mb_strlen($b) <=> mb_strlen($a));
+        $alternation = implode('|', array_map(
+            static fn (string $l) => preg_quote($l, '/'),
+            $letters,
+        ));
+
+        if (! preg_match('/^(\d{2})\s*('.$alternation.')\s*(\d{3})\s*(\d{2})$/u', $text, $m)) {
+            return null;
+        }
+
+        return self::tryMake($m[1], $m[2], $m[3], $m[4])?->key();
+    }
+
     /** کلید یکتای جستجو: 12-ب-345-67 */
     public function key(): string
     {

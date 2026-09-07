@@ -8,6 +8,7 @@ use App\Domain\Appointment\Actions\TransitionAppointment;
 use App\Domain\Appointment\Data\Actor;
 use App\Domain\Appointment\Enums\AppointmentStatus;
 use App\Domain\Appointment\Exceptions\InvalidStateTransition;
+use App\Domain\Appointment\Exceptions\TransitionBlocked;
 use App\Domain\Appointment\Support\QrToken;
 use App\Domain\Queue\QueueService;
 use App\Http\Controllers\Controller;
@@ -95,7 +96,7 @@ class AppointmentController extends Controller
                 // دلیل خالی است: هویت لغوکننده را خود Actor حمل می‌کند و پنل
                 // آن را به‌صورت «لغو توسط راننده» نشان می‌دهد.
             );
-        } catch (InvalidStateTransition $e) {
+        } catch (InvalidStateTransition|TransitionBlocked $e) {
             return back()->with('error', $e->getMessage());
         }
 

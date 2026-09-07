@@ -121,12 +121,16 @@ final class GateTest extends TestCase
     }
 
     #[Test]
-    public function checking_in_records_the_arrival_and_burns_the_code(): void
+    public function checking_in_records_the_arrival_and_closes_the_gate_behind_it(): void
     {
         [$appointment, $token] = $this->todayAppointmentWithQr();
+        $guard = $this->gate();
 
-        $this->actingAs($this->gate())
-            ->post(route('staff.gate.check-in', $appointment))
+        // بدون اسکن، ورود ثبت نمی‌شود — پس اول اسکن
+        $this->actingAs($guard)->post(route('staff.gate.scan'), ['token' => $token]);
+
+        $this->actingAs($guard)
+            ->post(route('staff.gate.check-in', $appointment), ['plate_match' => true])
             ->assertRedirect(route('staff.gate.index'))
             ->assertSessionHas('success');
 
@@ -134,13 +138,19 @@ final class GateTest extends TestCase
 
         $this->assertSame(S::CheckedIn, $appointment->status);
         $this->assertNotNull($appointment->checked_in_at);
-        $this->assertNull($appointment->qr_token_hash);
         $this->assertNotNull($appointment->qr_used_at);
 
-        // همان کد بار دوم نباید کار کند
-        $this->actingAs($this->gate())
-            ->post(route('staff.gate.scan'), ['token' => $token])
-            ->assertInertia(fn (AssertableInertia $page) => $page->whereNot('result.error', null));
+        // توکن عمداً زنده می‌ماند: راننده همین کد را در باسکول و لاین بارگیری
+        // هم نشان می‌دهد. چیزی که دوباره‌کاری را می‌بندد، وضعیت نوبت است.
+        $this->assertNotNull($appointment->qr_token_hash);
+
+        $this->actingAs($guard)->post(route('staff.gate.scan'), ['token' => $token]);
+
+        $this->actingAs($guard)
+            ->post(route('staff.gate.check-in', $appointment), ['plate_match' => true])
+            ->assertSessionHas('error');
+
+        $this->assertSame(1, $appointment->transitions()->where('to_status', S::CheckedIn->value)->count());
     }
 
     #[Test]
@@ -182,7 +192,7 @@ final class GateTest extends TestCase
 
         $this->actingAs($this->gate())
             ->from(route('staff.gate.index'))
-            ->post(route('staff.gate.check-in', $appointment->fresh()))
+            ->post(route('staff.gate.check-in', $appointment->fresh()), ['plate_match' => true])
             ->assertSessionHas('error');
 
         $this->assertSame(S::Completed, $appointment->fresh()->status);
@@ -196,7 +206,7 @@ final class GateTest extends TestCase
 
         $this->actingAs($ceo)->get(route('staff.gate.index'))->assertForbidden();
         $this->actingAs($ceo)->post(route('staff.gate.scan'), ['token' => $token])->assertForbidden();
-        $this->actingAs($ceo)->post(route('staff.gate.check-in', $appointment))->assertForbidden();
+        $this->actingAs($ceo)->post(route('staff.gate.check-in', $appointment), ['plate_match' => true])->assertForbidden();
     }
 
     #[Test]

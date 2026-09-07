@@ -9,9 +9,13 @@ use App\Domain\Appointment\Actions\TransitionAppointment;
 use App\Domain\Appointment\Data\Actor;
 use App\Domain\Appointment\Enums\AppointmentStatus;
 use App\Domain\Appointment\Exceptions\InvalidStateTransition;
+use App\Domain\Appointment\Exceptions\TransitionBlocked;
 use App\Domain\Appointment\Support\QrToken;
 use App\Domain\Audit\SecurityLogger;
+use App\Domain\Gate\ScanTicket;
+use App\Domain\Truck\PlateNumber;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Staff\GateCheckInRequest;
 use App\Http\Requests\Staff\PlateLookupRequest;
 use App\Http\Resources\AppointmentResource;
 use App\Models\Appointment;
@@ -23,13 +27,22 @@ use Inertia\Inertia;
 use Inertia\Response;
 
 /**
- * صفحه‌ی نگهبانی/باسکول: اعتبارسنجی نوبت و ثبت ورود.
+ * صفحه‌ی نگهبانی: اعتبارسنجی حواله و ثبت ورود.
  *
- * دو مسیر دارد که به یک نتیجه می‌رسند — اسکن QR، و جستجوی دستی پلاک برای
- * وقتی که گوشی راننده خاموش است یا QR خوانده نمی‌شود.
+ * دو قانون که کل این کلاس دور آن‌ها ساخته شده:
+ *
+ *   ۱. بدون اسکن QR ورود ممنوع است. جستجوی پلاک فقط «نمایش وضعیت» است و
+ *      دکمه‌ی ورودش خاموش می‌ماند، مگر کسی دسترسی gate.manual-override
+ *      داشته باشد و دلیل بنویسد — که آن هم در لاگ امنیتی ثبت می‌شود.
+ *   ۲. پلاکِ دیده‌شده باید با پلاکِ حواله یکی باشد. مغایرت یعنی راهبند بسته
+ *      می‌ماند؛ نه هشدار، نه «ادامه بده».
  */
 class GateController extends Controller
 {
+    private const ENTRY_QR = 'qr';
+
+    private const ENTRY_MANUAL = 'manual';
+
     public function __construct(private readonly SecurityLogger $security) {}
 
     public function index(Request $request): Response
@@ -73,10 +86,18 @@ class GateController extends Controller
             return $this->result($request, $appointment, 'این کد دیگر معتبر نیست. راننده باید کد را از برنامه دوباره باز کند.');
         }
 
-        return $this->result($request, $appointment);
+        ScanTicket::issue($request, $appointment);
+
+        return $this->result($request, $appointment, scanned: true);
     }
 
-    /** جستجوی دستی با پلاک — وقتی QR در دسترس نیست */
+    /**
+     * جستجوی پلاک — فقط برای دیدنِ وضعیت.
+     *
+     * نتیجه‌ی این مسیر بلیط اسکن صادر نمی‌کند، پس دکمه‌ی ورود روی آن خاموش
+     * است. این عمدی است: راهی که «وقتی QR خوانده نمی‌شود» باز گذاشته شود،
+     * همان راهی است که کامیونِ بی‌حواله از آن وارد می‌شود.
+     */
     public function lookup(PlateLookupRequest $request): Response
     {
         $plate = $request->plate();
@@ -99,13 +120,51 @@ class GateController extends Controller
         return $this->result($request, $appointment);
     }
 
-    /** ثبت ورود کامیون به محوطه */
-    public function checkIn(Request $request, Appointment $appointment, TransitionAppointment $transition): RedirectResponse
-    {
-        $this->authorizeGate($request);
-
+    /**
+     * ثبت ورود کامیون به محوطه.
+     *
+     * سه دروازه پشت سر هم؛ رد شدن از هرکدام یعنی راهبند بسته می‌ماند:
+     * دسترسی، اسکن QR (یا استثنای ثبت‌شده)، و تطبیق پلاک.
+     */
+    public function checkIn(
+        GateCheckInRequest $request,
+        Appointment $appointment,
+        TransitionAppointment $transition,
+    ): RedirectResponse {
         if ($request->user()->cannot('transition', [$appointment, AppointmentStatus::CheckedIn])) {
             return back()->with('error', 'برای ثبت ورود دسترسی ندارید.');
+        }
+
+        $scanned = ScanTicket::isValid($request, $appointment);
+        $reason = $request->string('override_reason')->trim()->toString();
+
+        if (! $scanned) {
+            $mayOverride = $request->user()->can(Permissions::GATE_MANUAL_OVERRIDE);
+
+            $this->security->log(
+                SecurityLogger::GATE_NO_QR,
+                $appointment->ulid,
+                $appointment,
+                ['allowed' => $mayOverride && $reason !== '', 'reason' => $reason ?: null],
+                $request,
+            );
+
+            if (! $mayOverride) {
+                return back()->with(
+                    'error',
+                    'ورود فقط با اسکن QR ثبت می‌شود. اگر کد راننده خوانده نمی‌شود، با مسئول شیفت تماس بگیرید.',
+                );
+            }
+
+            if ($reason === '') {
+                return back()->with('error', 'برای ثبت ورود بدون اسکن، نوشتن دلیل الزامی است.');
+            }
+        }
+
+        $plateCheck = $this->verifyPlate($request, $appointment);
+
+        if ($plateCheck !== null) {
+            return back()->with('error', $plateCheck);
         }
 
         try {
@@ -114,20 +173,75 @@ class GateController extends Controller
                 AppointmentStatus::CheckedIn,
                 Actor::user($request->user(), $request->ip()),
             );
-        } catch (InvalidStateTransition $e) {
+        } catch (InvalidStateTransition|TransitionBlocked $e) {
             return back()->with('error', $e->getMessage());
         }
 
-        // توکن QR یک‌بارمصرف است: بعد از ورود دیگر نباید دوباره کار کند
-        $appointment->forceFill(['qr_used_at' => now(), 'qr_token_hash' => null])->save();
+        $appointment->forceFill([
+            'qr_used_at' => now(),
+            'gate_entry_method' => $scanned ? self::ENTRY_QR : self::ENTRY_MANUAL,
+            'gate_observed_plate' => $appointment->truck?->plate_key,
+            'gate_override_reason' => $scanned ? null : $reason,
+            'gate_override_by_user_id' => $scanned ? null : $request->user()->id,
+        ])->save();
+
+        ScanTicket::consume($request, $appointment);
 
         return redirect()
             ->route('staff.gate.index')
             ->with('success', 'ورود نوبت '.$appointment->number.' ثبت شد.');
     }
 
-    private function result(Request $request, ?Appointment $appointment, ?string $error = null): Response
+    /**
+     * تطبیق پلاک. اگر خطایی برگردد، ورود ثبت نمی‌شود.
+     *
+     * وقتی پلاک‌خوان مقدار فرستاده باشد، خودِ سرور مقایسه می‌کند و تأیید
+     * چشمیِ نگهبان اصلاً خوانده نمی‌شود — دستگاه تبانی نمی‌کند.
+     */
+    private function verifyPlate(GateCheckInRequest $request, Appointment $appointment): ?string
     {
+        $expected = $appointment->truck?->plate_key;
+        $observed = $request->string('observed_plate')->trim()->toString();
+
+        if ($observed !== '') {
+            $normalised = PlateNumber::normalizeKey($observed);
+
+            if ($normalised === $expected) {
+                return null;
+            }
+
+            $this->security->log(
+                SecurityLogger::GATE_PLATE_MISMATCH,
+                $appointment->ulid,
+                $appointment,
+                ['expected' => $expected, 'observed' => $normalised ?? $observed, 'source' => 'device'],
+                $request,
+            );
+
+            return 'پلاک خوانده‌شده با پلاک حواله یکی نیست. راهبند باز نمی‌شود؛ موضوع به حراست گزارش شد.';
+        }
+
+        if ($request->boolean('plate_match')) {
+            return null;
+        }
+
+        $this->security->log(
+            SecurityLogger::GATE_PLATE_MISMATCH,
+            $appointment->ulid,
+            $appointment,
+            ['expected' => $expected, 'observed' => null, 'source' => 'guard'],
+            $request,
+        );
+
+        return 'مغایرت پلاک ثبت شد و ورود انجام نشد.';
+    }
+
+    private function result(
+        Request $request,
+        ?Appointment $appointment,
+        ?string $error = null,
+        bool $scanned = false,
+    ): Response {
         $appointment?->load(['driver', 'truck.truckType', 'product']);
 
         return Inertia::render('Staff/Gate/Index', [
@@ -141,6 +255,11 @@ class GateController extends Controller
                     ? array_merge((new AppointmentResource($appointment))->resolve($request), [
                         'can_check_in' => $error === null
                             && $request->user()->can('transition', [$appointment, AppointmentStatus::CheckedIn]),
+                        // بدون اسکن، دکمه‌ی ورود فقط برای دارندگان استثنا باز است
+                        'scanned' => $scanned,
+                        'needs_override' => ! $scanned,
+                        'may_override' => $request->user()->can(Permissions::GATE_MANUAL_OVERRIDE),
+                        'expected_plate' => $appointment->truck?->plate(),
                         'is_today' => $appointment->date->isToday(),
                     ])
                     : null,

@@ -58,6 +58,7 @@ class BookingController extends Controller
 
         return Inertia::render('Driver/Booking/Create', [
             'driverName' => $driver->name,
+            'driverNationalCode' => $driver->national_code,
             'lastTruck' => $lastTruck ? [
                 'plate' => $lastTruck->plate(),
                 'truck_type_id' => $lastTruck->truck_type_id,
@@ -99,8 +100,14 @@ class BookingController extends Controller
             $truck->update(['truck_type_id' => $request->integer('truck_type_id')]);
         }
 
-        if ($driver->name !== $request->string('driver_name')->toString()) {
-            $driver->update(['name' => $request->string('driver_name')->toString()]);
+        // حواله به نام راننده صادر می‌شود؛ نام و کد ملی همان‌جا قطعی می‌شوند
+        $identity = array_filter([
+            'name' => $request->string('driver_name')->toString(),
+            'national_code' => $request->string('national_code')->toString(),
+        ]);
+
+        if (array_diff_assoc($identity, $driver->only(array_keys($identity)))) {
+            $driver->update($identity);
         }
 
         try {

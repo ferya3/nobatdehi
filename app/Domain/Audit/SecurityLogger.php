@@ -28,6 +28,12 @@ final class SecurityLogger
     public const QR_INVALID = 'qr_invalid';
     public const QR_REPLAY = 'qr_replay';
 
+    /** ورود بدون اسکن QR — یا تلاش برایش، یا استثنایی که مدیر داده */
+    public const GATE_NO_QR = 'gate_no_qr';
+
+    /** پلاکِ دیده‌شده با پلاکِ حواله یکی نبود */
+    public const GATE_PLATE_MISMATCH = 'gate_plate_mismatch';
+
     public function log(
         string $event,
         ?string $identifier = null,

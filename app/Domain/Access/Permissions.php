@@ -18,6 +18,14 @@ final class Permissions
     public const QUEUE_NO_SHOW = 'queue.no-show';
     public const QUEUE_MANAGE = 'queue.manage';
 
+    /**
+     * ثبت ورود بدون اسکن QR.
+     *
+     * عمداً از queue.checkin جداست: نگهبان می‌تواند ورود ثبت کند ولی فقط با
+     * اسکن. دور زدن این قانون کارِ مسئولِ بالادست است و در لاگ امنیتی می‌نشیند.
+     */
+    public const GATE_MANUAL_OVERRIDE = 'gate.manual-override';
+
     public const APPOINTMENTS_VIEW = 'appointments.view';
     public const APPOINTMENTS_CREATE = 'appointments.create';
     public const APPOINTMENTS_CANCEL = 'appointments.cancel';
@@ -48,6 +56,7 @@ final class Permissions
             self::QUEUE_COMPLETE_LOADING => 'پایان بارگیری',
             self::QUEUE_NO_SHOW => 'ثبت عدم حضور',
             self::QUEUE_MANAGE => 'اداره صف (تغییر ترتیب و وضعیت پایه)',
+            self::GATE_MANUAL_OVERRIDE => 'ثبت ورود بدون اسکن QR (استثنا)',
 
             self::APPOINTMENTS_VIEW => 'مشاهده نوبت‌ها',
             self::APPOINTMENTS_CREATE => 'ثبت نوبت به‌جای راننده',

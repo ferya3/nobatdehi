@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Appointment\Actions;
 
 use App\Domain\Appointment\AppointmentStateMachine;
+use App\Domain\Appointment\TransitionPreconditions;
 use App\Domain\Appointment\Data\Actor;
 use App\Domain\Appointment\Enums\AppointmentStatus;
 use App\Domain\Appointment\Exceptions\BookingException;
@@ -24,7 +25,10 @@ use Illuminate\Support\Facades\DB;
  */
 final class TransitionAppointment
 {
-    public function __construct(private readonly AppointmentStateMachine $machine) {}
+    public function __construct(
+        private readonly AppointmentStateMachine $machine,
+        private readonly TransitionPreconditions $preconditions,
+    ) {}
 
     public function __invoke(
         Appointment $appointment,
@@ -47,6 +51,12 @@ final class TransitionAppointment
 
             if (! $this->machine->canTransition($from, $to, $actor->canRollback())) {
                 throw InvalidStateTransition::between($from, $to);
+            }
+
+            // بازگردانی عمداً از شرط‌ها معاف است: کارِ اصلاحِ اشتباه، خودش
+            // نباید پشت همان شرطی گیر کند که اشتباه را ساخته.
+            if (! $isRollback) {
+                $this->preconditions->assert($fresh, $to);
             }
 
             $this->syncCapacity($fresh, $from, $to);

@@ -11,6 +11,7 @@ use App\Domain\Appointment\Data\Actor;
 use App\Domain\Appointment\Enums\AppointmentStatus;
 use App\Domain\Appointment\Exceptions\BookingException;
 use App\Domain\Appointment\Exceptions\InvalidStateTransition;
+use App\Domain\Appointment\Exceptions\TransitionBlocked;
 use App\Domain\Queue\QueueService;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\AppointmentResource;
@@ -88,7 +89,7 @@ class QueueController extends Controller
                 $validated['reason'] ?? null,
                 $validated['loading_point_id'] ?? null,
             );
-        } catch (InvalidStateTransition|BookingException $e) {
+        } catch (InvalidStateTransition|BookingException|TransitionBlocked $e) {
             return back()->with('error', $e->getMessage());
         }
 

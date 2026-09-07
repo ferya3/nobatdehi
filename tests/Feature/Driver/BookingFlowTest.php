@@ -38,6 +38,7 @@ final class BookingFlowTest extends TestCase
     {
         return array_merge([
             'driver_name' => 'علی رضایی',
+            'national_code' => '0499370899',
             'plate_two' => '12',
             'plate_letter' => 'ب',
             'plate_three' => '345',

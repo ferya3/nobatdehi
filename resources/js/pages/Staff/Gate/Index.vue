@@ -5,8 +5,9 @@ import PlateBadge from '@/components/PlateBadge.vue';
 import PlateInput from '@/components/PlateInput.vue';
 import QrScanner from '@/components/QrScanner.vue';
 import StatusBadge from '@/components/StatusBadge.vue';
+import TextInput from '@/components/TextInput.vue';
 import StaffLayout from '@/layouts/StaffLayout.vue';
-import type { Appointment, PageProps } from '@/types';
+import type { Appointment, PageProps, PlateParts } from '@/types';
 import { router, useForm, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 
@@ -14,7 +15,16 @@ const props = defineProps<{
     onSiteCount: number;
     result?: {
         error: string | null;
-        appointment: (Appointment & { can_check_in: boolean; is_today: boolean }) | null;
+        appointment:
+            | (Appointment & {
+                  can_check_in: boolean;
+                  is_today: boolean;
+                  scanned: boolean;
+                  needs_override: boolean;
+                  may_override: boolean;
+                  expected_plate: PlateParts | null;
+              })
+            | null;
     };
 }>();
 
@@ -41,6 +51,20 @@ const lookup = useForm({
 const found = computed(() => props.result?.appointment ?? null);
 const error = computed(() => props.result?.error ?? null);
 
+// راهبند تا وقتی نگهبان پلاک را تأیید نکرده باز نمی‌شود
+const plateConfirmed = ref(false);
+const overrideReason = ref('');
+
+const blockedWithoutScan = computed(() => (found.value?.needs_override ?? false) && !(found.value?.may_override ?? false));
+
+const readyToOpen = computed(() => {
+    const a = found.value;
+    if (!a?.can_check_in || blockedWithoutScan.value) return false;
+    if (!plateConfirmed.value) return false;
+    if (a.needs_override && overrideReason.value.trim().length < 8) return false;
+    return true;
+});
+
 const plateComplete = computed(
     () =>
         lookup.plate_two.length === 2 &&
@@ -64,7 +88,23 @@ function checkIn() {
 
     router.post(
         route('staff.gate.check-in', found.value.ulid),
-        {},
+        {
+            plate_match: plateConfirmed.value,
+            override_reason: found.value.needs_override ? overrideReason.value.trim() : null,
+        },
+        { onFinish: () => (checkingIn.value = false) },
+    );
+}
+
+function reportMismatch() {
+    if (!found.value) return;
+
+    checkingIn.value = true;
+
+    // عمداً همان مسیر ورود است: سرور مغایرت را در لاگ امنیتی ثبت می‌کند
+    router.post(
+        route('staff.gate.check-in', found.value.ulid),
+        { plate_match: false },
         { onFinish: () => (checkingIn.value = false) },
     );
 }
@@ -72,6 +112,8 @@ function checkIn() {
 function reset() {
     scanner.value?.stop();
     lookup.reset();
+    plateConfirmed.value = false;
+    overrideReason.value = '';
     router.get(route('staff.gate.index'));
 }
 </script>
@@ -135,19 +177,64 @@ function reset() {
                     </div>
                 </dl>
 
-                <div class="space-y-2 border-t border-slate-100 p-5">
+                <div class="space-y-3 border-t border-slate-100 p-5">
                     <AlertBox v-if="!found.is_today" tone="warning">
                         این نوبت برای امروز نیست ({{ found.jalali_long }}).
                     </AlertBox>
 
-                    <AppButton
-                        v-if="found.can_check_in"
-                        size="lg"
-                        :loading="checkingIn"
-                        @click="checkIn"
-                    >
-                        ثبت ورود
-                    </AppButton>
+                    <!-- قانون ۱: بدون اسکن، ورود ممنوع -->
+                    <AlertBox v-if="blockedWithoutScan" tone="error">
+                        این نوبت با اسکن QR باز نشده است. ورود بدون اسکن ثبت نمی‌شود؛
+                        از راننده بخواهید کد را در برنامه باز کند.
+                    </AlertBox>
+
+                    <template v-else-if="found.can_check_in">
+                        <!-- قانون ۲: پلاکِ جلوی چشم باید با پلاک حواله یکی باشد -->
+                        <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                            <p class="text-sm font-medium text-slate-700">پلاک حواله را با پلاک کامیون مقابل تطبیق دهید</p>
+
+                            <div class="mt-3 flex justify-center">
+                                <PlateBadge v-if="found.truck" :plate="found.truck.plate" />
+                            </div>
+
+                            <label class="mt-4 flex items-start gap-2.5">
+                                <input
+                                    v-model="plateConfirmed"
+                                    type="checkbox"
+                                    class="mt-0.5 size-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                                />
+                                <span class="text-sm text-slate-800">
+                                    پلاک کامیون را دیدم و با پلاک بالا یکی است.
+                                </span>
+                            </label>
+
+                            <button
+                                type="button"
+                                :disabled="checkingIn"
+                                class="mt-3 text-xs font-medium text-rose-700 underline underline-offset-4 disabled:opacity-50"
+                                @click="reportMismatch"
+                            >
+                                پلاک مغایرت دارد — ثبت و اطلاع به حراست
+                            </button>
+                        </div>
+
+                        <!-- استثنا: فقط برای کسی که دسترسی‌اش را دارد -->
+                        <div v-if="found.needs_override" class="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                            <p class="text-sm font-medium text-amber-900">ثبت ورود بدون اسکن QR</p>
+                            <p class="mt-1 text-xs text-amber-800">
+                                این کار در لاگ امنیتی به نام شما ثبت می‌شود. دلیلش را بنویسید.
+                            </p>
+                            <TextInput
+                                v-model="overrideReason"
+                                class="mt-3"
+                                placeholder="مثلاً گوشی راننده خاموش بود و با کارت ملی تطبیق داده شد"
+                            />
+                        </div>
+
+                        <AppButton size="lg" :disabled="!readyToOpen" :loading="checkingIn" @click="checkIn">
+                            ثبت ورود و باز کردن راهبند
+                        </AppButton>
+                    </template>
 
                     <AlertBox v-else-if="!error" tone="warning">
                         از این وضعیت نمی‌توان ورود ثبت کرد.
@@ -170,7 +257,7 @@ function reset() {
                     <div>
                         <h2 class="text-sm font-semibold text-slate-700">جستجو با شماره پلاک</h2>
                         <p class="mt-1 text-xs text-slate-500">
-                            وقتی گوشی راننده در دسترس نیست یا کد خوانده نمی‌شود.
+                            فقط برای دیدن وضعیت نوبت. ورود از این راه ثبت نمی‌شود.
                         </p>
                     </div>
 

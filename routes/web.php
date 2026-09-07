@@ -13,6 +13,7 @@ use App\Http\Controllers\Staff\QueueController;
 use App\Http\Controllers\Staff\ReportController;
 use App\Http\Controllers\Staff\SettingsController;
 use App\Http\Controllers\Staff\SmsSettingsController;
+use App\Http\Controllers\Staff\WeighbridgeController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -79,6 +80,12 @@ Route::prefix('panel')->name('staff.')->group(function () {
         Route::post('/gate/scan', [GateController::class, 'scan'])->name('gate.scan');
         Route::post('/gate/lookup', [GateController::class, 'lookup'])->name('gate.lookup');
         Route::post('/gate/{appointment}/check-in', [GateController::class, 'checkIn'])->name('gate.check-in');
+
+        // باسکول اول و دوم
+        Route::get('/weighbridge', [WeighbridgeController::class, 'index'])->name('weighbridge.index');
+        Route::post('/weighbridge/scan', [WeighbridgeController::class, 'scan'])->name('weighbridge.scan');
+        Route::post('/weighbridge/{appointment}/record', [WeighbridgeController::class, 'record'])
+            ->name('weighbridge.record');
 
         Route::get('/queue', [QueueController::class, 'index'])->name('queue.index');
         Route::get('/queue/{appointment}', [QueueController::class, 'show'])->name('queue.show');

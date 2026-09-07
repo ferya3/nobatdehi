@@ -6,10 +6,13 @@ namespace Tests\Support;
 
 use App\Domain\Appointment\Data\NewAppointment;
 use App\Domain\Slot\SlotGenerator;
+use App\Domain\Weighbridge\ExitPermit;
 use App\Domain\Truck\PlateNumber;
+use App\Models\Appointment;
 use App\Models\AppointmentSlot;
 use App\Models\Driver;
 use App\Models\Factory;
+use App\Models\LoadingRecord;
 use App\Models\Product;
 use App\Models\Truck;
 use Carbon\CarbonImmutable;
@@ -90,6 +93,38 @@ trait SeedsFactory
             ->orderBy('start_time')
             ->skip($index)
             ->firstOrFail();
+    }
+
+    /**
+     * باسکول اول را پر می‌کند.
+     *
+     * از فاز باسکول به بعد، «شروع بارگیری» شرط دارد؛ تست‌هایی که فقط
+     * می‌خواهند از این مرحله رد شوند، این را صدا می‌زنند نه اینکه شرط را
+     * دور بزنند.
+     */
+    protected function recordTare(Appointment $appointment, float $kg = 14000): LoadingRecord
+    {
+        return LoadingRecord::updateOrCreate(
+            ['appointment_id' => $appointment->id],
+            ['empty_weight_kg' => $kg, 'tare_weighed_at' => now(), 'tare_source' => 'device'],
+        );
+    }
+
+    /** باسکول دوم و برگه‌ی خروج — شرط ثبت خروج */
+    protected function recordGross(Appointment $appointment, float $kg = 34000): LoadingRecord
+    {
+        $record = LoadingRecord::firstOrCreate(['appointment_id' => $appointment->id]);
+
+        $record->forceFill([
+            'loaded_weight_kg' => $kg,
+            'gross_weighed_at' => now(),
+            'gross_source' => 'device',
+            'net_weight_kg' => $kg - (float) $record->empty_weight_kg,
+        ])->save();
+
+        ExitPermit::issue($appointment, $record);
+
+        return $record->refresh();
     }
 
     protected function booking(

@@ -84,6 +84,15 @@ final class QueuePanelTest extends TestCase
         ];
 
         foreach ($steps as [$status, $extra]) {
+            // باسکول اول قبل از بارگیری، باسکول دوم قبل از خروج
+            if ($status === S::Loading) {
+                $this->recordTare($appointment);
+            }
+
+            if ($status === S::Completed) {
+                $this->recordGross($appointment);
+            }
+
             $this->actingAs($operator)
                 ->from(route('staff.queue.index'))
                 ->post(route('staff.queue.transition', $appointment), ['to' => $status->value] + $extra)

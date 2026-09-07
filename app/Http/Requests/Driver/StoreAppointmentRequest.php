@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Requests\Driver;
 
 use App\Domain\Truck\PlateNumber;
+use App\Rules\NationalCode;
 use App\Support\Digits;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -20,6 +21,7 @@ class StoreAppointmentRequest extends FormRequest
     protected function prepareForValidation(): void
     {
         $this->merge([
+            'national_code' => Digits::toLatin((string) $this->input('national_code')),
             'plate_two' => Digits::toLatin((string) $this->input('plate_two')),
             'plate_three' => Digits::toLatin((string) $this->input('plate_three')),
             'plate_iran' => Digits::toLatin((string) $this->input('plate_iran')),
@@ -32,6 +34,7 @@ class StoreAppointmentRequest extends FormRequest
 
         return [
             'driver_name' => ['required', 'string', 'min:3', 'max:120'],
+            'national_code' => ['required', 'string', new NationalCode()],
             'plate_two' => ['required', 'digits:2'],
             'plate_letter' => ['required', 'string', Rule::in(PlateNumber::LETTERS)],
             'plate_three' => ['required', 'digits:3'],
@@ -63,6 +66,7 @@ class StoreAppointmentRequest extends FormRequest
         return [
             'driver_name.required' => 'نام و نام خانوادگی راننده را وارد کنید.',
             'driver_name.min' => 'نام راننده خیلی کوتاه است.',
+            'national_code.required' => 'کد ملی راننده را وارد کنید.',
             'plate_two.required' => 'دو رقم اول پلاک را وارد کنید.',
             'plate_two.digits' => 'دو رقم اول پلاک باید دو رقم باشد.',
             'plate_letter.required' => 'حرف پلاک را انتخاب کنید.',

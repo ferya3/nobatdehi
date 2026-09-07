@@ -64,6 +64,14 @@ final class TransitionAppointmentTest extends TestCase
         $actor = Actor::user($this->operator(), '10.0.0.1');
 
         foreach ([S::Waiting, S::Called, S::CheckedIn, S::Loading, S::Loaded, S::Completed] as $status) {
+            if ($status === S::Loading) {
+                $this->recordTare($appointment);
+            }
+
+            if ($status === S::Completed) {
+                $this->recordGross($appointment);
+            }
+
             $appointment = ($this->transition)($appointment, $status, $actor);
         }
 
@@ -132,6 +140,10 @@ final class TransitionAppointmentTest extends TestCase
         $actor = Actor::user($this->operator());
 
         foreach ([S::Waiting, S::Called, S::CheckedIn, S::Loading] as $status) {
+            if ($status === S::Loading) {
+                $this->recordTare($appointment);
+            }
+
             $appointment = ($this->transition)($appointment, $status, $actor);
         }
 
@@ -147,6 +159,10 @@ final class TransitionAppointmentTest extends TestCase
         $operator = $this->operator();
 
         foreach ([S::Waiting, S::Called, S::CheckedIn, S::Loading] as $status) {
+            if ($status === S::Loading) {
+                $this->recordTare($appointment);
+            }
+
             $appointment = ($this->transition)($appointment, $status, Actor::user($operator));
         }
 

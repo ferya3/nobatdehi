@@ -14,6 +14,7 @@ import { computed, ref, watch } from 'vue';
 
 const props = defineProps<{
     driverName: string | null;
+    driverNationalCode: string | null;
     lastTruck: { plate: PlateParts; truck_type_id: number | null } | null;
     truckTypes: { id: number; name: string; capacity_tons: string | null }[];
     products: { id: number; name: string; load_tons: string | null; description: string | null }[];
@@ -28,6 +29,7 @@ const step = ref(0);
 
 const form = useForm({
     driver_name: props.driverName ?? '',
+    national_code: props.driverNationalCode ?? '',
     plate_two: props.lastTruck?.plate.two ?? '',
     plate_letter: props.lastTruck?.plate.letter ?? '',
     plate_three: props.lastTruck?.plate.three ?? '',
@@ -57,7 +59,13 @@ const plateComplete = computed(
 );
 
 const canContinue = computed(() => {
-    if (step.value === 0) return form.driver_name.trim().length >= 3 && plateComplete.value && form.truck_type_id !== null;
+    if (step.value === 0)
+        return (
+            form.driver_name.trim().length >= 3 &&
+            form.national_code.trim().length === 10 &&
+            plateComplete.value &&
+            form.truck_type_id !== null
+        );
     if (step.value === 1) return form.product_id !== null;
     if (step.value === 2) return form.slot_id !== null;
     return true;
@@ -70,7 +78,8 @@ watch(
         const keys = Object.keys(errors);
         if (!keys.length) return;
 
-        if (keys.some((k) => k.startsWith('plate') || k === 'driver_name' || k === 'truck_type_id')) step.value = 0;
+        if (keys.some((k) => k.startsWith('plate') || k === 'driver_name' || k === 'national_code' || k === 'truck_type_id'))
+            step.value = 0;
         else if (keys.includes('product_id')) step.value = 1;
         else if (keys.includes('slot_id')) step.value = 2;
     },
@@ -119,6 +128,23 @@ function submit() {
                         v-model="form.driver_name"
                         placeholder="مثلاً علی رضایی"
                         :invalid="!!form.errors.driver_name"
+                    />
+                </FormField>
+
+                <FormField
+                    label="کد ملی راننده"
+                    for="national_code"
+                    :error="form.errors.national_code"
+                    hint="حواله و برگه‌ی خروج به همین نام و کد ملی صادر می‌شود"
+                >
+                    <TextInput
+                        id="national_code"
+                        v-model="form.national_code"
+                        inputmode="numeric"
+                        dir="ltr"
+                        :maxlength="10"
+                        placeholder="۰۰۱۲۳۴۵۶۷۸"
+                        :invalid="!!form.errors.national_code"
                     />
                 </FormField>
 
