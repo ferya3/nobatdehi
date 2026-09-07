@@ -14,7 +14,10 @@ class HomeController extends Controller
 {
     /**
      * هر نقش به صفحه‌ی خودش می‌رود.
-     * نگهبان نباید با صف کامل روبه‌رو شود و مدیرعامل نباید پنل اپراتور را ببیند.
+     *
+     * کسی که تمام روز پشت یک ایستگاه است باید همان‌جا باز شود؛ نگهبان نباید
+     * با صف کامل روبه‌رو شود. برای بقیه داشبورد صفحه‌ی اول است — صف امروز
+     * هم همان‌جاست، پس چیزی از دست نمی‌رود.
      */
     public function __invoke(Request $request): RedirectResponse
     {
@@ -22,9 +25,10 @@ class HomeController extends Controller
 
         return match (true) {
             $user->hasRole(Roles::GATE) => redirect()->route('staff.gate.index'),
-            $user->hasRole(Roles::CEO) => redirect()->route('staff.dashboard'),
-            $user->can(Permissions::QUEUE_VIEW) => redirect()->route('staff.queue.index'),
+            $user->hasRole(Roles::WEIGHBRIDGE) => redirect()->route('staff.weighbridge.index'),
+            $user->hasRole(Roles::WAREHOUSE) => redirect()->route('staff.loading.index'),
             $user->can(Permissions::DASHBOARD_VIEW) => redirect()->route('staff.dashboard'),
+            $user->can(Permissions::QUEUE_VIEW) => redirect()->route('staff.queue.index'),
             default => redirect()->route('staff.login')->with('error', 'برای این حساب هیچ دسترسی‌ای تعریف نشده است.'),
         };
     }

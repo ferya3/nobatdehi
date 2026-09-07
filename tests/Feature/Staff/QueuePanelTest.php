@@ -341,13 +341,27 @@ final class QueuePanelTest extends TestCase
             ->assertRedirect(route('staff.login'));
     }
 
+    /**
+     * هر نقش به صفحه‌ی خودش می‌رود.
+     *
+     * کسی که تمام روز پشت یک ایستگاه است همان‌جا باز می‌شود. بقیه روی
+     * داشبورد می‌نشینند — صف امروز هم همان‌جاست.
+     */
     #[Test]
     public function each_role_lands_on_its_own_page(): void
     {
-        $this->actingAs($this->staff(Roles::OPERATOR))->get(route('staff.home'))
-            ->assertRedirect(route('staff.queue.index'));
+        $landings = [
+            Roles::GATE => 'staff.gate.index',
+            Roles::WEIGHBRIDGE => 'staff.weighbridge.index',
+            Roles::WAREHOUSE => 'staff.loading.index',
+            Roles::OPERATOR => 'staff.dashboard',
+            Roles::FACTORY_MANAGER => 'staff.dashboard',
+            Roles::CEO => 'staff.dashboard',
+        ];
 
-        $this->actingAs($this->staff(Roles::CEO))->get(route('staff.home'))
-            ->assertRedirect(route('staff.dashboard'));
+        foreach ($landings as $role => $route) {
+            $this->actingAs($this->staff($role))->get(route('staff.home'))
+                ->assertRedirect(route($route));
+        }
     }
 }

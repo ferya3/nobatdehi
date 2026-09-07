@@ -12,28 +12,69 @@ const menuOpen = ref(false);
 
 const can = (permission: string) => user.value?.permissions.includes(permission) ?? false;
 
-// route().has() لازم است: مسیرهای فازهای بعدی ممکن است هنوز ثبت نشده باشند
-const nav = computed(() =>
-    [
-        { label: 'صف امروز', name: 'staff.queue.index', pattern: 'staff.queue.*', permission: 'queue.view' },
-        { label: 'نگهبانی', name: 'staff.gate.index', pattern: 'staff.gate.*', permission: 'queue.checkin' },
-        { label: 'بارگیری', name: 'staff.loading.index', pattern: 'staff.loading.*', permission: 'queue.start-loading' },
-        { label: 'باسکول', name: 'staff.weighbridge.index', pattern: 'staff.weighbridge.*', permission: 'weighing.record' },
-        { label: 'داشبورد', name: 'staff.dashboard', pattern: 'staff.dashboard', permission: 'dashboard.view' },
-        { label: 'گزارش‌ها', name: 'staff.reports', pattern: 'staff.reports', permission: 'reports.view' },
-        { label: 'محصولات', name: 'staff.products.index', pattern: 'staff.products.*', permission: 'products.manage' },
-        { label: 'انواع کامیون', name: 'staff.truck-types.index', pattern: 'staff.truck-types.*', permission: 'products.manage' },
-        { label: 'تنظیمات', name: 'staff.settings.edit', pattern: 'staff.settings.edit', permission: 'settings.manage' },
-        { label: 'دستگاه‌های گیت', name: 'staff.settings.devices', pattern: 'staff.settings.devices*', permission: 'settings.manage' },
-        { label: 'پیامک', name: 'staff.settings.sms', pattern: 'staff.settings.sms*', permission: 'settings.manage' },
-    ]
+/**
+ * منوی اصلی — به ترتیبی که کار در کارخانه پیش می‌رود.
+ *
+ * داشبورد، بعد سه ایستگاهِ فیزیکی به همان ترتیبی که کامیون از آن‌ها رد
+ * می‌شود، و در آخر گزارش‌ها. تنظیمات از منوی اصلی بیرون رفته چون کاری است
+ * که هفته‌ای یک بار انجام می‌شود، نه هر ساعت.
+ *
+ * route().has() لازم است: مسیرهای فازهای بعدی ممکن است هنوز ثبت نشده باشند.
+ */
+const PRIMARY = [
+    { label: 'داشبورد', name: 'staff.dashboard', pattern: 'staff.dashboard', permission: 'dashboard.view' },
+    { label: 'نگهبانی', name: 'staff.gate.index', pattern: 'staff.gate.*', permission: 'queue.checkin' },
+    { label: 'باسکول', name: 'staff.weighbridge.index', pattern: 'staff.weighbridge.*', permission: 'weighing.record' },
+    { label: 'بارگیری', name: 'staff.loading.index', pattern: 'staff.loading.*', permission: 'queue.start-loading' },
+    { label: 'گزارش‌ها', name: 'staff.reports', pattern: 'staff.reports', permission: 'reports.view' },
+];
+
+/** هرچه یک بار تنظیم می‌شود و بعد دست نمی‌خورد */
+const SETTINGS = [
+    { label: 'نوبت‌دهی و ساعات کاری', name: 'staff.settings.edit', pattern: 'staff.settings.edit', permission: 'settings.manage' },
+    { label: 'محصولات', name: 'staff.products.index', pattern: 'staff.products.*', permission: 'products.manage' },
+    { label: 'انواع کامیون', name: 'staff.truck-types.index', pattern: 'staff.truck-types.*', permission: 'products.manage' },
+    { label: 'دستگاه‌های گیت', name: 'staff.settings.devices', pattern: 'staff.settings.devices*', permission: 'settings.manage' },
+    { label: 'پیامک', name: 'staff.settings.sms', pattern: 'staff.settings.sms*', permission: 'settings.manage' },
+];
+
+type NavItem = { label: string; href: string; active: boolean };
+
+function build(items: typeof PRIMARY): NavItem[] {
+    return items
         .filter((item) => can(item.permission) && route().has(item.name))
         .map((item) => ({
             label: item.label,
             href: route(item.name),
             active: route().current(item.pattern),
-        })),
-);
+        }));
+}
+
+const primary = computed(() => {
+    const items = build(PRIMARY);
+
+    // صف امروز داخل داشبورد نشان داده می‌شود. ولی نگهبانی و باسکول و انبار
+    // داشبورد ندارند و بدون این، راهی به صف نمی‌ماند.
+    if (!can('dashboard.view') && can('queue.view') && route().has('staff.queue.index')) {
+        items.unshift({
+            label: 'صف امروز',
+            href: route('staff.queue.index'),
+            active: route().current('staff.queue.*'),
+        });
+    }
+
+    return items;
+});
+
+const settings = computed(() => build(SETTINGS));
+const settingsActive = computed(() => settings.value.some((item) => item.active));
+
+const settingsOpen = ref(false);
+
+function closeMenus() {
+    settingsOpen.value = false;
+    menuOpen.value = false;
+}
 
 function logout() {
     router.post(route('staff.logout'));
@@ -62,7 +103,7 @@ function logout() {
 
                 <nav class="hidden flex-1 items-center gap-1 md:flex">
                     <Link
-                        v-for="item in nav"
+                        v-for="item in primary"
                         :key="item.href"
                         :href="item.href"
                         :class="[
@@ -74,6 +115,48 @@ function logout() {
                     >
                         {{ item.label }}
                     </Link>
+
+                    <div v-if="settings.length" class="relative">
+                        <button
+                            type="button"
+                            :class="[
+                                'flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm transition',
+                                settingsActive
+                                    ? 'bg-brand-50 font-medium text-brand-700'
+                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                            ]"
+                            :aria-expanded="settingsOpen"
+                            @click="settingsOpen = !settingsOpen"
+                        >
+                            تنظیمات
+                            <svg class="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                <path d="m6 9 6 6 6-6" stroke-linecap="round" stroke-linejoin="round" />
+                            </svg>
+                        </button>
+
+                        <!-- کلیک بیرون از منو باید ببنددش، وگرنه باز می‌ماند و روی صفحه می‌نشیند -->
+                        <div v-if="settingsOpen" class="fixed inset-0 z-10" @click="settingsOpen = false" />
+
+                        <div
+                            v-if="settingsOpen"
+                            class="absolute start-0 z-20 mt-1 w-56 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-lg"
+                        >
+                            <Link
+                                v-for="item in settings"
+                                :key="item.href"
+                                :href="item.href"
+                                :class="[
+                                    'block px-4 py-2 text-sm transition',
+                                    item.active
+                                        ? 'bg-brand-50 font-medium text-brand-700'
+                                        : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900',
+                                ]"
+                                @click="closeMenus"
+                            >
+                                {{ item.label }}
+                            </Link>
+                        </div>
+                    </div>
                 </nav>
 
                 <div class="ms-auto flex items-center gap-3">
@@ -104,16 +187,33 @@ function logout() {
 
             <nav v-if="menuOpen" class="border-t border-slate-200 px-4 py-2 md:hidden">
                 <Link
-                    v-for="item in nav"
+                    v-for="item in primary"
                     :key="item.href"
                     :href="item.href"
                     :class="[
                         'block rounded-lg px-3 py-2 text-sm',
                         item.active ? 'bg-brand-50 font-medium text-brand-700' : 'text-slate-600',
                     ]"
+                    @click="closeMenus"
                 >
                     {{ item.label }}
                 </Link>
+
+                <div v-if="settings.length" class="mt-2 border-t border-slate-100 pt-2">
+                    <p class="px-3 py-1 text-xs font-medium text-slate-400">تنظیمات</p>
+                    <Link
+                        v-for="item in settings"
+                        :key="item.href"
+                        :href="item.href"
+                        :class="[
+                            'block rounded-lg px-3 py-2 text-sm',
+                            item.active ? 'bg-brand-50 font-medium text-brand-700' : 'text-slate-600',
+                        ]"
+                        @click="closeMenus"
+                    >
+                        {{ item.label }}
+                    </Link>
+                </div>
             </nav>
         </header>
 
