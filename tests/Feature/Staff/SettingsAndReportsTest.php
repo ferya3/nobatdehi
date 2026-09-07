@@ -11,8 +11,11 @@ use App\Domain\Appointment\Data\Actor;
 use App\Domain\Appointment\Enums\AppointmentStatus as S;
 use App\Models\Appointment;
 use App\Models\AppointmentSlot;
+use App\Models\AuditLog;
+use App\Models\Factory;
 use App\Models\User;
 use App\Models\WorkingHour;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia;
 use PHPUnit\Framework\Attributes\Test;
@@ -23,11 +26,20 @@ final class SettingsAndReportsTest extends TestCase
 {
     use RefreshDatabase, SeedsFactory;
 
-    private \App\Models\Factory $factory;
+    private Factory $factory;
 
     protected function setUp(): void
     {
         parent::setUp();
+
+        // ساعت را وسط یک روز کاری نگه می‌داریم.
+        //
+        // تست‌های گزارش نوبت را می‌سازند و بعد به «امروز» می‌کشانند. اگر
+        // ساعتِ واقعیِ اجرا بعد از ۱۸:۰۰ باشد، زمان‌بند نوبت‌ها را روی فردا
+        // می‌گذارد و آن جابه‌جایی دو نوبت را روی یک لاین/اسلات می‌نشاند —
+        // یعنی تست بعد از پایان ساعت کاری می‌شکست، بی‌آنکه کد ایرادی داشته باشد.
+        $this->travelTo(CarbonImmutable::parse('2026-09-07 09:00', 'Asia/Tehran'));
+
         $this->factory = $this->seedFactory();
         $this->seedStaff();
     }
@@ -160,7 +172,7 @@ final class SettingsAndReportsTest extends TestCase
             'user_id' => $manager->id,
         ]);
 
-        $log = \App\Models\AuditLog::latest('id')->firstOrFail();
+        $log = AuditLog::latest('id')->firstOrFail();
 
         $this->assertSame(30, $log->old_values['slot_minutes']);
         $this->assertSame(20, $log->new_values['slot_minutes']);

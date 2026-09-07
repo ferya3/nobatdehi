@@ -7,6 +7,7 @@ namespace App\Domain\Queue;
 use App\Domain\Appointment\Enums\AppointmentStatus;
 use App\Models\Appointment;
 use App\Models\Factory;
+use App\Support\Jalali;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -169,6 +170,42 @@ final class QueueService
             ->value('minutes');
 
         return $average !== null ? (int) round((float) $average) : null;
+    }
+
+    /**
+     * نوبت‌های روزهای دیگر — همان‌هایی که پنلِ «امروز» نشانشان نمی‌دهد.
+     *
+     * زمان‌بند وقتی امروز بسته یا پر باشد نوبت را روی روز بعد می‌گذارد؛ کارِ
+     * درستی است، ولی اپراتور یک فهرست خالی می‌بیند و نتیجه می‌گیرد نوبت اصلاً
+     * ثبت نشده. این متد همان چیزی است که آن سوءتفاهم را می‌بندد.
+     *
+     * @return array<int, array{date:string, jalali:string, total:int, is_tomorrow:bool}>
+     */
+    public function upcomingDays(Factory $factory, CarbonImmutable $shown): array
+    {
+        $from = CarbonImmutable::today();
+        $until = $from->addDays(max(1, (int) $factory->booking_horizon_days));
+
+        return Appointment::where('factory_id', $factory->id)
+            ->whereIn('status', AppointmentStatus::activeValues())
+            ->whereDate('date', '>=', $from->toDateString())
+            ->whereDate('date', '<=', $until->toDateString())
+            ->whereDate('date', '!=', $shown->toDateString())
+            ->selectRaw('date, count(*) as total')
+            ->groupBy('date')
+            ->orderBy('date')
+            ->get()
+            ->map(function ($row) {
+                $date = CarbonImmutable::parse((string) $row->date);
+
+                return [
+                    'date' => $date->toDateString(),
+                    'jalali' => Jalali::date($date),
+                    'total' => (int) $row->total,
+                    'is_tomorrow' => $date->isTomorrow(),
+                ];
+            })
+            ->all();
     }
 
     /** شمارنده‌های امروز برای داشبورد و پنل اپراتور */

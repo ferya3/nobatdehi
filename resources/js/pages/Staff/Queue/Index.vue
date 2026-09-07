@@ -34,6 +34,7 @@ const props = defineProps<{
     appointments: QueueRow[];
     loadingPoints: { id: number; name: string }[];
     statuses: { value: string; label: string; tone: string }[];
+    upcomingDays: { date: string; jalali: string; total: number; is_tomorrow: boolean }[];
 }>();
 
 const page = usePage<PageProps>();
@@ -149,6 +150,14 @@ function submit(row: QueueRow, action: QueueAction, data: Record<string, unknown
     );
 }
 
+// نوبت‌هایی که امروز نیستند ولی ثبت شده‌اند — جمعشان همان عددی است که
+// اپراتور باید ببیند تا نگوید «نوبت نیامد»
+const elsewhereTotal = computed(() => props.upcomingDays.reduce((sum, day) => sum + day.total, 0));
+
+function goToDate(date: string) {
+    router.get(route('staff.queue.index'), { date }, { preserveScroll: true });
+}
+
 function shiftDate(days: number) {
     const next = new Date(props.date);
     next.setDate(next.getDate() + days);
@@ -171,7 +180,7 @@ let poller: ReturnType<typeof setInterval> | null = null;
 function refresh() {
     if (document.hidden || pending.value) return;
 
-    router.reload({ only: ['appointments', 'counters'] });
+    router.reload({ only: ['appointments', 'counters', 'upcomingDays'] });
 }
 
 /**
@@ -267,6 +276,29 @@ watch(connected, (isLive) => {
                         روز بعد
                     </button>
                 </div>
+            </div>
+
+            <!--
+                نوارِ روزهای دیگر.
+
+                نوبتی که بعد از ساعت کاری گرفته می‌شود روی فردا می‌نشیند. بدون
+                این نوار، اپراتور فقط یک فهرست خالیِ «امروز» می‌بیند و فکر
+                می‌کند نوبت اصلاً به پنل نرسیده است.
+            -->
+            <div
+                v-if="upcomingDays.length"
+                class="flex flex-wrap items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-900"
+            >
+                <span class="font-medium">{{ elsewhereTotal }} نوبت روی روزهای دیگر ثبت شده:</span>
+                <button
+                    v-for="day in upcomingDays"
+                    :key="day.date"
+                    type="button"
+                    class="rounded-lg border border-amber-300 bg-white px-2.5 py-1 text-xs font-medium text-amber-900 transition hover:bg-amber-100"
+                    @click="goToDate(day.date)"
+                >
+                    {{ day.is_tomorrow ? 'فردا' : day.jalali }} — {{ day.total }} نوبت
+                </button>
             </div>
 
             <AlertBox v-if="flash.success" tone="success">{{ flash.success }}</AlertBox>
@@ -499,7 +531,17 @@ watch(connected, (isLive) => {
 
                             <tr v-if="!rows.length">
                                 <td colspan="7" class="px-4 py-12 text-center text-sm text-slate-500">
-                                    نوبتی با این فیلتر وجود ندارد.
+                                    <p>نوبتی با این فیلتر وجود ندارد.</p>
+                                    <p v-if="upcomingDays.length" class="mt-2 text-slate-600">
+                                        ولی {{ elsewhereTotal }} نوبت برای روزهای دیگر ثبت شده —
+                                        <button
+                                            type="button"
+                                            class="font-medium text-brand-700 underline underline-offset-4 hover:text-brand-800"
+                                            @click="goToDate(upcomingDays[0].date)"
+                                        >
+                                            {{ upcomingDays[0].is_tomorrow ? 'رفتن به فردا' : `رفتن به ${upcomingDays[0].jalali}` }}
+                                        </button>
+                                    </p>
                                 </td>
                             </tr>
                         </tbody>

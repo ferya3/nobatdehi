@@ -8,8 +8,10 @@ use App\Domain\Access\Roles;
 use App\Domain\Appointment\Actions\CreateAppointment;
 use App\Domain\Appointment\Enums\AppointmentStatus as S;
 use App\Models\Appointment;
+use App\Models\Factory;
 use App\Models\LoadingPoint;
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia;
 use PHPUnit\Framework\Attributes\Test;
@@ -20,7 +22,7 @@ final class QueuePanelTest extends TestCase
 {
     use RefreshDatabase, SeedsFactory;
 
-    private \App\Models\Factory $factory;
+    private Factory $factory;
 
     protected function setUp(): void
     {
@@ -63,6 +65,58 @@ final class QueuePanelTest extends TestCase
                 ->where('counters.total', 1)
                 ->where('counters.waiting', 1)
                 ->where('isToday', true));
+    }
+
+    /**
+     * نوبتی که بعد از ساعت کاری گرفته می‌شود روی فردا می‌نشیند — درست هم
+     * همین است. ولی پنل پیش‌فرض «امروز» را نشان می‌دهد و اپراتور یک فهرست
+     * خالی می‌بیند و نتیجه می‌گیرد نوبت اصلاً به پنل نرسیده. این تست همان
+     * سوءتفاهم را قفل می‌کند.
+     */
+    #[Test]
+    public function a_booking_that_lands_on_another_day_is_announced_on_todays_panel(): void
+    {
+        // ۱۹:۳۰ یکشنبه — کارخانه ۱۸:۰۰ بسته شده، پس نوبت روی فردا می‌نشیند
+        $this->travelTo(CarbonImmutable::parse('2026-09-07 19:30', 'Asia/Tehran'));
+
+        $appointment = app(CreateAppointment::class)($this->booking(
+            $this->factory,
+            $this->makeDriver('09123456789'),
+            $this->makeTruck('12', 'ب', '345', '67'),
+        ));
+
+        $this->assertFalse(
+            $appointment->date->isToday(),
+            'این تست فقط وقتی معنا دارد که نوبت روی روز دیگری نشسته باشد.',
+        );
+
+        $this->actingAs($this->staff(Roles::OPERATOR))
+            ->get(route('staff.queue.index'))
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->has('appointments', 0)
+                ->has('upcomingDays', 1)
+                ->where('upcomingDays.0.date', $appointment->date->toDateString())
+                ->where('upcomingDays.0.total', 1));
+    }
+
+    #[Test]
+    public function the_other_days_strip_leaves_out_the_day_already_on_screen(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-09-07 19:30', 'Asia/Tehran'));
+
+        $appointment = app(CreateAppointment::class)($this->booking(
+            $this->factory,
+            $this->makeDriver('09123456789'),
+            $this->makeTruck('12', 'ب', '345', '67'),
+        ));
+
+        $this->actingAs($this->staff(Roles::OPERATOR))
+            ->get(route('staff.queue.index', ['date' => $appointment->date->toDateString()]))
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->has('appointments', 1)
+                ->has('upcomingDays', 0));
     }
 
     #[Test]

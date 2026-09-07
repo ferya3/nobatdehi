@@ -51,6 +51,10 @@ class QueueController extends Controller
             'jalaliDate' => Jalali::long($date),
             'isToday' => $date->isToday(),
             'counters' => $this->queue->todayCounters($factory, $date),
+
+            // نوبت‌هایی که روی روزهای دیگر نشسته‌اند — وگرنه اپراتور فکر
+            // می‌کند اصلاً ثبت نشده‌اند
+            'upcomingDays' => $this->queue->upcomingDays($factory, $date),
             'appointments' => $appointments->map(
                 fn (Appointment $a) => $this->rowFor($request, $a),
             )->values(),
