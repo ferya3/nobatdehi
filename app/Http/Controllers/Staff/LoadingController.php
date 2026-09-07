@@ -12,6 +12,7 @@ use App\Domain\Appointment\Exceptions\InvalidStateTransition;
 use App\Domain\Appointment\Exceptions\TransitionBlocked;
 use App\Domain\Appointment\Support\QrToken;
 use App\Domain\Audit\SecurityLogger;
+use App\Domain\Gate\GateDevices;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\AppointmentResource;
 use App\Models\Appointment;
@@ -32,7 +33,10 @@ use Inertia\Response;
  */
 class LoadingController extends Controller
 {
-    public function __construct(private readonly SecurityLogger $security) {}
+    public function __construct(
+        private readonly SecurityLogger $security,
+        private readonly GateDevices $gateDevices,
+    ) {}
 
     public function index(Request $request): Response
     {
@@ -115,6 +119,8 @@ class LoadingController extends Controller
         $appointment?->load(['driver', 'truck.truckType', 'product', 'loadingRecord', 'factory']);
 
         return Inertia::render('Staff/Loading/Index', [
+            // همان بارکدخوانی که در گیت هست، اینجا هم کار می‌کند
+            'barcodeEnabled' => $this->gateDevices->barcodeEnabled(),
             'loadingPoints' => LoadingPoint::where('factory_id', $factory->id)
                 ->active()
                 ->orderBy('code')
