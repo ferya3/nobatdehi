@@ -52,7 +52,11 @@ type NumericField =
 const NUMBERS: { key: NumericField; label: string; hint?: string }[] = [
     { key: 'slot_minutes', label: 'طول هر نوبت (دقیقه)' },
     { key: 'daily_capacity', label: 'حداکثر نوبت روزانه' },
-    { key: 'loading_lines', label: 'تعداد لاین بارگیری' },
+    {
+        key: 'loading_lines',
+        label: 'تعداد لاین بارگیری',
+        hint: 'چند کامیون هم‌زمان بارگیری می‌شوند. کارخانه‌ای که یک خط بارگیری دارد باید ۱ بگذارد؛ عدد بزرگ‌تر یعنی چند نوبت روی یک ساعت صادر می‌شود.',
+    },
     { key: 'avg_loading_minutes', label: 'زمان متوسط بارگیری (دقیقه)', hint: 'وقتی داده‌ی واقعی نباشد برای تخمین استفاده می‌شود' },
     {
         key: 'no_show_grace_minutes',
@@ -119,6 +123,23 @@ function submit() {
                         />
                     </FormField>
                 </div>
+
+                <!--
+                    عددِ لاین بی‌صدا اشتباه می‌شود.
+
+                    ۳ یعنی سه کامیون هم‌زمان ساعت ۰۷:۰۰ نوبت می‌گیرند. اگر
+                    کارخانه یک خط بارگیری داشته باشد، هر سه صبح جلوی در
+                    می‌ایستند و کسی تا وقتی صف را نبیند متوجه نمی‌شود.
+                -->
+                <p v-if="form.loading_lines > 1" class="mt-4 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                    با
+                    <span class="num font-semibold">{{ form.loading_lines }}</span>
+                    لاین، سامانه تا
+                    <span class="num font-semibold">{{ form.loading_lines }}</span>
+                    کامیون را روی یک ساعت نوبت می‌دهد. اگر کارخانه فقط یک خط بارگیری دارد، این عدد باید
+                    <span class="num font-semibold">۱</span>
+                    باشد تا نوبت‌ها پشت سر هم صادر شوند.
+                </p>
             </section>
 
             <section class="card overflow-hidden">

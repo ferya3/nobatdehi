@@ -199,6 +199,38 @@ final class SchedulerTest extends TestCase
         );
     }
 
+    /**
+     * یک خط بارگیری یعنی صف، نه ساعتِ مشترک.
+     *
+     * قانون کارِ کارخانه: نوبت تازه از جایی شروع می‌شود که نوبت‌های قبلی
+     * تمام شده‌اند — ۰۷:۰۰ به‌علاوه‌ی مدت بارگیریِ هر کسی که جلوتر است. یک
+     * تریلیِ ۸۰ دقیقه‌ای و یک خاورِ ۳۰ دقیقه‌ای یعنی نفر سوم ۰۸:۵۰.
+     */
+    #[Test]
+    public function on_a_single_line_each_truck_waits_for_the_ones_ahead(): void
+    {
+        $this->travelTo(CarbonImmutable::today()->setTime(1, 0));
+
+        $factory = $this->openEveryDay(['booking_lead_minutes' => 30, 'loading_lines' => 1]);
+
+        $expected = [
+            [80, '07:00', '08:20'],
+            [30, '08:20', '08:50'],
+            [80, '08:50', '10:10'],
+        ];
+
+        foreach ($expected as [$minutes, $startsAt, $endsAt]) {
+            $opening = $this->scheduler->nextOpening($factory, $minutes);
+
+            $this->assertNotNull($opening);
+            $this->assertSame($startsAt, $opening->startsAt->format('H:i'));
+            $this->assertSame($endsAt, $opening->endsAt->format('H:i'));
+            $this->assertSame(1, $opening->line);
+
+            $this->bookInto($opening);
+        }
+    }
+
     /** نوبتی که دقیقاً روی یک Opening نشسته — بدون عبور از CreateAppointment */
     private function bookInto(Opening $opening): Appointment
     {

@@ -23,7 +23,10 @@ class FactorySeeder extends Seeder
                 'timezone' => 'Asia/Tehran',
                 'slot_minutes' => 30,
                 'daily_capacity' => 80,
-                'loading_lines' => 3,
+                // یک خط بارگیری: محافظه‌کارانه‌ترین پیش‌فرض. عدد بزرگ‌تر یعنی
+                // چند کامیون روی یک ساعت نوبت می‌گیرند، و اگر کارخانه واقعاً
+                // آن‌قدر خط نداشته باشد همه‌شان صبح جلوی در جمع می‌شوند.
+                'loading_lines' => 1,
                 'avg_loading_minutes' => 25,
                 'no_show_grace_minutes' => 60,
                 'booking_horizon_days' => 7,
