@@ -7,6 +7,7 @@ import SelectCard from '@/components/SelectCard.vue';
 import StepIndicator from '@/components/StepIndicator.vue';
 import TextInput from '@/components/TextInput.vue';
 import DriverLayout from '@/layouts/DriverLayout.vue';
+import { uuid } from '@/lib/uuid';
 import type { DayOption, PlateParts, SlotOption } from '@/types';
 import { router, useForm } from '@inertiajs/vue3';
 import { computed, ref, watch } from 'vue';
@@ -36,7 +37,7 @@ const form = useForm({
     slot_id: null as number | null,
     date: props.selectedDate ?? '',
     // هر بار که فرم باز می‌شود یک کلید تازه: کلیک دوم و سوم نوبت جدید نمی‌سازد
-    idempotency_key: crypto.randomUUID(),
+    idempotency_key: uuid(),
 });
 
 const loadingSlots = ref(false);
