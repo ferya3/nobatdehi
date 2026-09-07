@@ -6,6 +6,7 @@ namespace App\Http\Middleware;
 
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Vite;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
@@ -20,6 +21,15 @@ class SecurityHeaders
 {
     public function handle(Request $request, Closure $next): Response
     {
+        /*
+         * nonce قبل از رندر شدن view ساخته می‌شود.
+         *
+         * دو اسکریپت درون‌خطی داریم که نمی‌شود حذفشان کرد: مسیرهای Ziggy و
+         * تگ‌های Vite. بدون nonce یا باید 'unsafe-inline' بدهیم — که CSP را
+         * تقریباً بی‌اثر می‌کند — یا صفحه اصلاً بالا نمی‌آید.
+         */
+        Vite::useCspNonce();
+
         $response = $next($request);
 
         foreach ($this->headers($request) as $name => $value) {
@@ -67,7 +77,7 @@ class SecurityHeaders
     {
         return implode('; ', [
             "default-src 'self'",
-            "script-src 'self'",
+            "script-src 'self' 'nonce-".Vite::cspNonce()."'",
             "style-src 'self' 'unsafe-inline'",
             "img-src 'self' data: blob:",
             "font-src 'self'",

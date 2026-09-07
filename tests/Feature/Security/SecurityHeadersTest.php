@@ -42,6 +42,25 @@ final class SecurityHeadersTest extends TestCase
     }
 
     #[Test]
+    public function test_the_inline_route_script_carries_the_nonce_from_the_header(): void
+    {
+        $response = $this->get(route('driver.login'));
+
+        preg_match("/'nonce-([^']+)'/", (string) $response->headers->get('Content-Security-Policy'), $header);
+        preg_match('/nonce="([^"]+)"/', $response->getContent(), $body);
+
+        $this->assertNotEmpty($header[1] ?? null, 'هدر CSP هیچ nonce ندارد.');
+        $this->assertNotEmpty($body[1] ?? null, 'اسکریپت درون‌خطی nonce ندارد.');
+
+        /*
+         * اگر این دو یکی نباشند، مرورگر اسکریپت مسیرهای Ziggy را می‌بندد،
+         * route() تعریف نمی‌شود و کل جاوااسکریپت صفحه می‌میرد — بدون هیچ
+         * خطای سمت سرور. curl این را نمی‌بیند؛ فقط مرورگر می‌بیند.
+         */
+        $this->assertSame($header[1], $body[1]);
+    }
+
+    #[Test]
     public function test_hsts_is_only_sent_over_https(): void
     {
         $this->get(route('driver.login'))->assertHeaderMissing('Strict-Transport-Security');

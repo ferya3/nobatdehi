@@ -14,7 +14,8 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-title" content="نوبت بارگیری">
 
-    @routes
+    {{-- nonce از SecurityHeaders می‌آید؛ بدون آن CSP این اسکریپت را می‌بندد --}}
+    @routes(nonce: Illuminate\Support\Facades\Vite::cspNonce())
     @vite(['resources/css/app.css', 'resources/js/app.ts'])
     @inertiaHead
 </head>
