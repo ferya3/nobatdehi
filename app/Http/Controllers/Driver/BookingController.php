@@ -63,9 +63,17 @@ class BookingController extends Controller
                 'plate' => $lastTruck->plate(),
                 'truck_type_id' => $lastTruck->truck_type_id,
             ] : null,
+            // مدت بارگیری همین‌جا به راننده گفته می‌شود، نه بعد از ثبت نوبت:
+            // «تریلی حدود ۴۰ دقیقه» روی کارتِ انتخاب، خودش یک تصمیم است.
             'truckTypes' => TruckType::where('is_active', true)
                 ->orderBy('sort_order')
-                ->get(['id', 'name', 'capacity_tons']),
+                ->get(['id', 'name', 'capacity_tons', 'loading_minutes'])
+                ->map(fn (TruckType $t) => [
+                    'id' => $t->id,
+                    'name' => $t->name,
+                    'capacity_tons' => $t->capacity_tons,
+                    'loading_minutes' => $t->loading_minutes ?? (int) $factory->avg_loading_minutes,
+                ]),
             'products' => Product::where('factory_id', $factory->id)
                 ->active()
                 ->orderBy('sort_order')

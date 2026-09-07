@@ -29,6 +29,9 @@ class StoreProductRequest extends FormRequest
             'load_tons' => ['nullable', 'numeric', 'min:0', 'max:9999.99'],
             'loading_minutes' => ['nullable', 'integer', 'min:1', 'max:600'],
             'sort_order' => ['required', 'integer', 'min:0', 'max:9999'],
+
+            // اولویت پیش‌فرضِ نوبت‌هایی که با این محصول ثبت می‌شوند
+            'priority' => ['required', 'integer', 'min:0', 'max:100'],
             'is_active' => ['required', 'boolean'],
         ];
     }
@@ -42,6 +45,7 @@ class StoreProductRequest extends FormRequest
             'load_tons' => 'تناژ هر بارگیری',
             'loading_minutes' => 'مدت بارگیری',
             'sort_order' => 'ترتیب نمایش',
+            'priority' => 'اولویت',
             'is_active' => 'وضعیت',
         ];
     }

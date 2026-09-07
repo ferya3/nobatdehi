@@ -66,7 +66,7 @@ final class QueueService
      * COALESCE همان زنجیره‌ی Appointment::expectedLoadingMinutes() است، فقط
      * در SQL: یک تریلی و یک خاور نباید در تخمین صف یک وزن داشته باشند.
      */
-    private function minutesAhead(Appointment $appointment, int $fallback): int
+    public function minutesAhead(Appointment $appointment, int $fallback): int
     {
         $minutes = $this->aheadQuery($appointment)
             ->join('trucks', 'trucks.id', '=', 'appointments.truck_id')
@@ -112,6 +112,40 @@ final class QueueService
         $untilSlot = (int) max(0, CarbonImmutable::now()->diffInMinutes($appointment->startsAt(), false));
 
         return max($queueMinutes, $untilSlot);
+    }
+
+    /**
+     * برنامه‌ی زمانیِ تخمینی یک نوبت — همان چیزی که به راننده اعلام می‌شود.
+     *
+     * برخلاف estimatedWaitMinutes() که فقط برای امروز معنی دارد، این برای
+     * نوبت فردا هم کار می‌کند: راننده در لحظه‌ی گرفتن نوبت باید بداند حدوداً
+     * چه ساعتی بارگیری‌اش تمام می‌شود، نه اینکه صبح روز بعد بفهمد.
+     *
+     * ساعت‌ها روی سرور به «H:i» تبدیل می‌شوند و نه به‌صورت ISO فرستاده
+     * می‌شوند: مرورگر راننده ISO را با منطقه‌ی زمانی *خودش* رندر می‌کند و
+     * گوشی‌ای که روی UTC مانده، ۰۷:۰۰ را ۰۳:۳۰ نشان می‌دهد.
+     *
+     * @return array{loading_minutes:int, queue_minutes:int, starts_at:string, ends_at:string}
+     */
+    public function plannedSchedule(Appointment $appointment): array
+    {
+        $appointment->loadMissing(['factory', 'product', 'truck.truckType']);
+
+        $factory = $appointment->factory;
+        $lines = max(1, (int) $factory->loading_lines);
+        $fallback = (int) $factory->avg_loading_minutes;
+
+        $loadingMinutes = $appointment->expectedLoadingMinutes();
+        $queueMinutes = (int) ceil($this->minutesAhead($appointment, $fallback) / $lines);
+
+        $startsAt = $appointment->startsAt()->addMinutes($queueMinutes);
+
+        return [
+            'loading_minutes' => $loadingMinutes,
+            'queue_minutes' => $queueMinutes,
+            'starts_at' => $startsAt->format('H:i'),
+            'ends_at' => $startsAt->addMinutes($loadingMinutes)->format('H:i'),
+        ];
     }
 
     /** میانگین واقعی زمان بارگیری امروز — اگر داده‌ای نبود، null */

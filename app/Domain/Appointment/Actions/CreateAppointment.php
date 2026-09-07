@@ -55,6 +55,9 @@ final class CreateAppointment
                 'driver_id' => $data->driver->id,
                 'truck_id' => $data->truck->id,
                 'product_id' => $data->product->id,
+                // اولویت از محصول snapshot می‌شود، نه اینکه هر بار خوانده شود:
+                // تغییر اولویت یک محصول نباید ترتیب صفِ دیروز را عوض کند.
+                'priority' => (int) $data->product->priority,
                 'slot_id' => $slot->id,
                 'date' => $slot->date,
                 'start_time' => $slot->start_time,

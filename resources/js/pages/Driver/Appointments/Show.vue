@@ -139,6 +139,44 @@ function cancel() {
                 </p>
             </section>
 
+            <!-- برنامه‌ی زمانی: برای نوبت امروز و فردا، هر دو -->
+            <section v-if="appointment.is_active && appointment.schedule" class="card divide-y divide-slate-100">
+                <div class="flex items-center justify-between p-5 pb-3">
+                    <p class="text-sm font-semibold text-slate-700">برنامه‌ی زمانی شما</p>
+                    <span class="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500">تخمینی</span>
+                </div>
+
+                <div class="flex items-center justify-between px-5 py-3">
+                    <p class="text-sm text-slate-500">ساعت نوبت</p>
+                    <p class="num text-sm font-semibold text-slate-800">{{ appointment.time }}</p>
+                </div>
+
+                <div class="flex items-center justify-between px-5 py-3">
+                    <p class="text-sm text-slate-500">تخمین شروع بارگیری</p>
+                    <p class="num text-lg font-bold text-brand-700">{{ appointment.schedule.starts_at }}</p>
+                </div>
+
+                <div class="flex items-center justify-between px-5 py-3">
+                    <p class="text-sm text-slate-500">
+                        مدت بارگیری
+                        <span v-if="appointment.truck?.type" class="text-slate-400">({{ appointment.truck.type }})</span>
+                    </p>
+                    <p class="text-sm font-semibold text-slate-800">
+                        {{ duration(appointment.schedule.loading_minutes) }}
+                    </p>
+                </div>
+
+                <div class="flex items-center justify-between px-5 py-3">
+                    <p class="text-sm text-slate-500">تخمین پایان کار</p>
+                    <p class="num text-sm font-semibold text-slate-800">{{ appointment.schedule.ends_at }}</p>
+                </div>
+
+                <p class="px-5 py-3 text-xs text-slate-400">
+                    مدت بارگیری بر اساس نوع کامیون شما حساب شده است. زمان‌ها تخمینی‌اند و با تغییر
+                    صف کارخانه کم و زیاد می‌شوند.
+                </p>
+            </section>
+
             <!-- وضعیت صف فقط برای نوبت امروز معنی دارد -->
             <section
                 v-if="appointment.is_active && !isCalled && appointment.ahead !== null && appointment.ahead !== undefined"

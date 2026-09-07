@@ -8,6 +8,7 @@ import StepIndicator from '@/components/StepIndicator.vue';
 import TextInput from '@/components/TextInput.vue';
 import DriverLayout from '@/layouts/DriverLayout.vue';
 import { uuid } from '@/lib/uuid';
+import { duration } from '@/lib/format';
 import type { DayOption, PlateParts, SlotOption } from '@/types';
 import { router, useForm } from '@inertiajs/vue3';
 import { computed, ref, watch } from 'vue';
@@ -16,7 +17,7 @@ const props = defineProps<{
     driverName: string | null;
     driverNationalCode: string | null;
     lastTruck: { plate: PlateParts; truck_type_id: number | null } | null;
-    truckTypes: { id: number; name: string; capacity_tons: string | null }[];
+    truckTypes: { id: number; name: string; capacity_tons: string | null; loading_minutes: number }[];
     products: { id: number; name: string; load_tons: string | null; description: string | null }[];
     days: DayOption[];
     slots: SlotOption[];
@@ -174,6 +175,9 @@ function submit() {
                             <p v-if="type.capacity_tons" class="mt-0.5 text-xs text-slate-500">
                                 تا <span class="num">{{ Number(type.capacity_tons) }}</span> تن
                             </p>
+                            <p class="mt-0.5 text-xs text-slate-400">
+                                بارگیری ≈ {{ duration(type.loading_minutes) }}
+                            </p>
                         </SelectCard>
                     </div>
                 </FormField>
@@ -297,6 +301,12 @@ function submit() {
                     <div class="flex justify-between gap-3">
                         <dt class="text-sm text-slate-500">ساعت</dt>
                         <dd class="num text-sm font-medium text-slate-800">{{ selectedSlot?.start_time ?? '—' }}</dd>
+                    </div>
+                    <div v-if="selectedTruckType" class="flex justify-between gap-3">
+                        <dt class="text-sm text-slate-500">مدت بارگیری (تخمینی)</dt>
+                        <dd class="text-sm font-medium text-slate-800">
+                            {{ duration(selectedTruckType.loading_minutes) }}
+                        </dd>
                     </div>
                 </dl>
 

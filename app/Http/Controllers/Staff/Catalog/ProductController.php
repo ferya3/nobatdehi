@@ -50,6 +50,7 @@ class ProductController extends Controller
                     'load_tons' => Digits::trimDecimal($p->load_tons),
                     'loading_minutes' => $p->loading_minutes,
                     'sort_order' => $p->sort_order,
+                    'priority' => $p->priority,
                     'is_active' => $p->is_active,
                     'appointments_count' => (int) ($used[$p->id] ?? 0),
                 ]),
@@ -111,7 +112,7 @@ class ProductController extends Controller
         $this->audit->log(
             action: 'DELETE_PRODUCT',
             entity: $product,
-            oldValues: $product->only(['name', 'code', 'load_tons', 'loading_minutes', 'is_active']),
+            oldValues: $product->only(['name', 'code', 'load_tons', 'loading_minutes', 'priority', 'is_active']),
             request: $request,
         );
 

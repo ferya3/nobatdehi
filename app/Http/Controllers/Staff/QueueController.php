@@ -12,8 +12,10 @@ use App\Domain\Appointment\Enums\AppointmentStatus;
 use App\Domain\Appointment\Exceptions\BookingException;
 use App\Domain\Appointment\Exceptions\InvalidStateTransition;
 use App\Domain\Appointment\Exceptions\TransitionBlocked;
+use App\Domain\Audit\AuditLogger;
 use App\Domain\Queue\QueueService;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Staff\UpdatePriorityRequest;
 use App\Http\Resources\AppointmentResource;
 use App\Models\Appointment;
 use App\Models\Factory;
@@ -31,6 +33,7 @@ class QueueController extends Controller
     public function __construct(
         private readonly QueueService $queue,
         private readonly AppointmentStateMachine $machine,
+        private readonly AuditLogger $audit,
     ) {}
 
     public function index(Request $request): Response
@@ -94,6 +97,33 @@ class QueueController extends Controller
         }
 
         return back()->with('success', 'وضعیت نوبت «'.$target->label().'» ثبت شد.');
+    }
+
+    /**
+     * تغییر اولویت یک نوبت.
+     *
+     * جدا از transition است چون وضعیت را عوض نمی‌کند، فقط جای نوبت را داخل
+     * همان ساعت جابه‌جا می‌کند. دلیل اجباری است تا «چرا این کامیون جلو افتاد»
+     * بعداً قابل جواب دادن باشد.
+     */
+    public function prioritize(UpdatePriorityRequest $request, Appointment $appointment): RedirectResponse
+    {
+        $before = ['priority' => (int) $appointment->priority, 'reason' => $appointment->priority_reason];
+
+        $appointment->update([
+            'priority' => $request->integer('priority'),
+            'priority_reason' => $request->string('priority_reason')->trim()->toString() ?: null,
+        ]);
+
+        $this->audit->log(
+            action: 'CHANGE_APPOINTMENT_PRIORITY',
+            entity: $appointment,
+            oldValues: $before,
+            newValues: ['priority' => $appointment->priority, 'reason' => $appointment->priority_reason],
+            request: $request,
+        );
+
+        return back()->with('success', 'اولویت نوبت '.$appointment->number.' ثبت شد.');
     }
 
     public function show(Request $request, Appointment $appointment): Response

@@ -58,3 +58,4 @@ export function duration(minutes: number | null | undefined): string {
 
     return m === 0 ? `${h} ساعت` : `${h} ساعت و ${m} دقیقه`;
 }
+

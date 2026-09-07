@@ -15,7 +15,7 @@ class SmsTemplateSeeder extends Seeder
             [
                 'key' => 'appointment.created.driver',
                 'title' => 'تأیید نوبت برای راننده',
-                'body' => "نوبت بارگیری شما ثبت شد.\nشماره نوبت: {number}\nتاریخ: {date}\nساعت: {time}\nنوع بار: {product}\n{factory}",
+                'body' => "نوبت بارگیری شما ثبت شد.\nشماره نوبت: {number}\nتاریخ: {date}\nساعت: {time}\nنوع بار: {product}\nمدت بارگیری: حدود {loading_minutes} دقیقه\nتخمین پایان کار: {ends_at}\n{factory}",
             ],
             [
                 'key' => 'appointment.created.manager',

@@ -82,6 +82,14 @@ export interface Appointment {
     is_today?: boolean;
     ahead?: number | null;
     eta_minutes?: number | null;
+    priority?: number;
+    priority_reason?: string | null;
+    schedule?: {
+        loading_minutes: number;
+        queue_minutes: number;
+        starts_at: string;
+        ends_at: string;
+    } | null;
 }
 
 export interface SlotOption {

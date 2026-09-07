@@ -51,6 +51,7 @@ final class ProductManagementTest extends TestCase
             'load_tons' => '28.5',
             'loading_minutes' => 35,
             'sort_order' => 9,
+            'priority' => 0,
             'is_active' => true,
         ], $overrides);
     }

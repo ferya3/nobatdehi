@@ -98,6 +98,8 @@ Route::prefix('panel')->name('staff.')->group(function () {
         Route::get('/queue/{appointment}', [QueueController::class, 'show'])->name('queue.show');
         Route::post('/queue/{appointment}/transition', [QueueController::class, 'transition'])
             ->name('queue.transition');
+        Route::post('/queue/{appointment}/priority', [QueueController::class, 'prioritize'])
+            ->name('queue.priority');
 
         Route::get('/reports', [ReportController::class, 'index'])->name('reports');
         Route::get('/reports/export', [ReportController::class, 'export'])->name('reports.export');

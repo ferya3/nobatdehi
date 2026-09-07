@@ -110,6 +110,11 @@ class AppointmentController extends Controller
             'is_today' => $appointment->date->isToday(),
             'ahead' => $this->queue->positionAhead($appointment),
             'eta_minutes' => $this->queue->estimatedWaitMinutes($appointment),
+
+            // برنامه‌ی زمانی برای هر روزی معتبر است، نه فقط امروز
+            'schedule' => $appointment->status->isActive()
+                ? $this->queue->plannedSchedule($appointment)
+                : null,
         ];
     }
 

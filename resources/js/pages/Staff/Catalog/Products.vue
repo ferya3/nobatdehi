@@ -16,6 +16,7 @@ interface Product {
     load_tons: string | null;
     loading_minutes: number | null;
     sort_order: number;
+    priority: number;
     is_active: boolean;
     appointments_count: number;
 }
@@ -39,6 +40,7 @@ const form = useForm({
     load_tons: '',
     loading_minutes: '',
     sort_order: '0',
+    priority: '0',
     is_active: true,
 });
 
@@ -60,6 +62,7 @@ function startEdit(product: Product) {
     form.load_tons = product.load_tons ?? '';
     form.loading_minutes = product.loading_minutes === null ? '' : String(product.loading_minutes);
     form.sort_order = String(product.sort_order);
+    form.priority = String(product.priority);
     form.is_active = product.is_active;
     editingId.value = product.id;
     open.value = true;
@@ -79,6 +82,7 @@ const payload = () => ({
     load_tons: form.load_tons.trim() === '' ? null : form.load_tons.trim(),
     loading_minutes: form.loading_minutes.trim() === '' ? null : Number(form.loading_minutes),
     sort_order: Number(form.sort_order || 0),
+    priority: Number(form.priority || 0),
 });
 
 function submit() {
@@ -150,6 +154,15 @@ function remove(product: Product) {
                         <TextInput id="sort_order" v-model="form.sort_order" inputmode="numeric" dir="ltr" :invalid="!!form.errors.sort_order" />
                     </FormField>
 
+                    <FormField
+                        label="اولویت در صف"
+                        for="priority"
+                        :error="form.errors.priority"
+                        hint="۰ عادی. عدد بزرگ‌تر یعنی زودتر — ولی فقط داخل همان ساعت، نه بین ساعت‌ها"
+                    >
+                        <TextInput id="priority" v-model="form.priority" inputmode="numeric" dir="ltr" placeholder="0" :invalid="!!form.errors.priority" />
+                    </FormField>
+
                     <FormField label="توضیح کوتاه" for="description" :error="form.errors.description" hint="اختیاری — زیر نام محصول به راننده نشان داده می‌شود">
                         <TextInput id="description" v-model="form.description" placeholder="کیسه‌ای ۵۰ کیلویی" :invalid="!!form.errors.description" />
                     </FormField>
@@ -175,6 +188,7 @@ function remove(product: Product) {
                                 <th class="px-4 py-3 font-medium">کد</th>
                                 <th class="px-4 py-3 font-medium">تناژ</th>
                                 <th class="px-4 py-3 font-medium">مدت بارگیری</th>
+                                <th class="px-4 py-3 font-medium">اولویت</th>
                                 <th class="px-4 py-3 font-medium">وضعیت</th>
                                 <th class="px-4 py-3 font-medium">نوبت‌ها</th>
                                 <th class="px-4 py-3" />
@@ -191,6 +205,12 @@ function remove(product: Product) {
                                 <td class="num px-4 py-3 text-slate-700">
                                     <span v-if="product.loading_minutes">{{ product.loading_minutes }} دقیقه</span>
                                     <span v-else class="text-slate-400">پیش‌فرض</span>
+                                </td>
+                                <td class="num px-4 py-3 text-slate-700">
+                                    <span v-if="product.priority" class="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900">
+                                        {{ product.priority }}
+                                    </span>
+                                    <span v-else class="text-slate-400">عادی</span>
                                 </td>
                                 <td class="px-4 py-3">
                                     <span
@@ -226,7 +246,7 @@ function remove(product: Product) {
                             </tr>
 
                             <tr v-if="!products.length">
-                                <td colspan="7" class="px-4 py-10 text-center text-sm text-slate-400">
+                                <td colspan="8" class="px-4 py-10 text-center text-sm text-slate-400">
                                     هنوز محصولی ثبت نشده است.
                                 </td>
                             </tr>

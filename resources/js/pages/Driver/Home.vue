@@ -77,6 +77,16 @@ function logout() {
                                 <PlateBadge v-if="appointment.truck" :plate="appointment.truck.plate" size="sm" />
                             </dd>
                         </div>
+                        <div v-if="appointment.schedule">
+                            <dt class="text-xs text-slate-500">تخمین شروع بارگیری</dt>
+                            <dd class="num font-semibold text-brand-700">{{ appointment.schedule.starts_at }}</dd>
+                        </div>
+                        <div v-if="appointment.schedule">
+                            <dt class="text-xs text-slate-500">مدت بارگیری</dt>
+                            <dd class="font-medium text-slate-800">
+                                {{ duration(appointment.schedule.loading_minutes) }}
+                            </dd>
+                        </div>
                     </dl>
 
                     <p

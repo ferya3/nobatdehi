@@ -19,6 +19,7 @@ class Product extends Model
             'load_tons' => 'decimal:2',
             'loading_minutes' => 'integer',
             'sort_order' => 'integer',
+            'priority' => 'integer',
             'is_active' => 'boolean',
         ];
     }

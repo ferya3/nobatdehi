@@ -39,6 +39,38 @@ const props = defineProps<{
 const page = usePage<PageProps>();
 const flash = computed(() => page.props.flash);
 
+const canManageQueue = computed(() => page.props.auth.user?.permissions.includes('queue.manage') ?? false);
+
+// تغییر اولویت: جای نوبت را داخل همان ساعت جابه‌جا می‌کند، نه بین ساعت‌ها
+const priorityFor = ref<QueueRow | null>(null);
+const priorityValue = ref(0);
+const priorityReason = ref('');
+
+function openPriority(row: QueueRow) {
+    priorityFor.value = row;
+    priorityValue.value = row.priority ?? 0;
+    priorityReason.value = '';
+}
+
+function savePriority() {
+    const row = priorityFor.value;
+    if (!row || priorityReason.value.trim().length < 5) return;
+
+    busy.value = row.ulid;
+
+    router.post(
+        route('staff.queue.priority', row.ulid),
+        { priority: priorityValue.value, priority_reason: priorityReason.value.trim() },
+        {
+            preserveScroll: true,
+            onFinish: () => {
+                busy.value = null;
+                priorityFor.value = null;
+            },
+        },
+    );
+}
+
 const filter = ref<string>('active');
 const search = ref('');
 const busy = ref<string | null>(null);
@@ -244,6 +276,56 @@ watch(connected, (isLive) => {
                 />
             </div>
 
+            <!-- تغییر اولویت -->
+            <div v-if="priorityFor" class="card space-y-4 border-amber-300 p-5">
+                <div>
+                    <p class="text-sm font-medium text-slate-800">
+                        اولویت نوبت <span class="num">{{ priorityFor.number }}</span>
+                    </p>
+                    <p class="mt-1 text-xs text-slate-500">
+                        اولویت فقط داخل همان ساعت اثر دارد؛ نوبت ساعت بعد را جلوی نوبت ساعت قبل نمی‌اندازد.
+                    </p>
+                </div>
+
+                <div class="flex items-center gap-3">
+                    <input
+                        v-model.number="priorityValue"
+                        type="range"
+                        min="0"
+                        max="100"
+                        step="10"
+                        class="flex-1 accent-amber-600"
+                        aria-label="اولویت"
+                    />
+                    <span class="num w-10 text-center text-lg font-bold text-amber-800">{{ priorityValue }}</span>
+                </div>
+
+                <input
+                    v-model="priorityReason"
+                    type="text"
+                    placeholder="دلیل تغییر اولویت (اجباری)"
+                    class="block w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm focus:border-amber-500 focus:outline-none focus:ring-4 focus:ring-amber-100"
+                />
+
+                <div class="flex gap-2">
+                    <button
+                        type="button"
+                        :disabled="priorityReason.trim().length < 5 || busy === priorityFor.ulid"
+                        class="rounded-xl bg-amber-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-amber-700 disabled:opacity-50"
+                        @click="savePriority"
+                    >
+                        ثبت اولویت
+                    </button>
+                    <button
+                        type="button"
+                        class="rounded-xl px-4 py-2 text-sm text-slate-600 transition hover:bg-slate-100"
+                        @click="priorityFor = null"
+                    >
+                        انصراف
+                    </button>
+                </div>
+            </div>
+
             <div v-if="pending" class="card space-y-4 border-brand-300 p-5">
                 <p class="text-sm font-medium text-slate-800">
                     {{ pending.action.label }} — نوبت
@@ -335,6 +417,13 @@ watch(connected, (isLive) => {
                                 </td>
                                 <td class="px-4 py-3">
                                     <StatusBadge :tone="row.status_tone" :label="row.status_label" size="sm" />
+                                    <p
+                                        v-if="row.priority"
+                                        :title="row.priority_reason ?? ''"
+                                        class="mt-1 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900"
+                                    >
+                                        اولویت <span class="num">{{ row.priority }}</span>
+                                    </p>
                                     <p v-if="row.cancelled_by_label" class="mt-1 text-xs font-medium text-rose-600">
                                         {{ row.cancelled_by_label }}
                                     </p>
@@ -344,6 +433,16 @@ watch(connected, (isLive) => {
                                 </td>
                                 <td class="px-4 py-3">
                                     <div class="flex flex-wrap gap-1.5">
+                                        <button
+                                            v-if="canManageQueue && row.is_active"
+                                            type="button"
+                                            :disabled="busy === row.ulid"
+                                            class="rounded-lg border border-amber-200 px-2.5 py-1 text-xs font-medium text-amber-800 transition hover:bg-amber-50 disabled:opacity-50"
+                                            @click="openPriority(row)"
+                                        >
+                                            اولویت
+                                        </button>
+
                                         <button
                                             v-for="action in row.actions"
                                             :key="action.value"

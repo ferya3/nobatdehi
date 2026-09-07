@@ -52,6 +52,7 @@ class Appointment extends Model
             'completed_at' => 'datetime',
             'cancelled_at' => 'datetime',
             'no_show_at' => 'datetime',
+            'priority' => 'integer',
         ];
     }
 
@@ -119,9 +120,18 @@ class Appointment extends Model
     }
 
     /** ترتیب طبیعی صف: زمان اسلات، بعد شماره نوبت */
+    /**
+     * ترتیب صف: ساعت، بعد اولویت، بعد شماره‌ی نوبت.
+     *
+     * اولویت بعد از ساعت می‌آید و نه قبل از آن — وگرنه نوبت ساعت ۱۴ می‌توانست
+     * جلوی نوبت ساعت ۸ بیفتد و کل نوبت‌دهی بی‌معنی می‌شد.
+     */
     public function scopeQueueOrder(Builder $query): Builder
     {
-        return $query->orderBy('start_time')->orderBy('number');
+        return $query
+            ->orderBy('start_time')
+            ->orderByDesc('priority')
+            ->orderBy('number');
     }
 
     // -------------------------------------------------------------- کمکی‌ها
