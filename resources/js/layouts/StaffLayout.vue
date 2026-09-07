@@ -17,6 +17,7 @@ const nav = computed(() =>
     [
         { label: 'صف امروز', name: 'staff.queue.index', pattern: 'staff.queue.*', permission: 'queue.view' },
         { label: 'نگهبانی', name: 'staff.gate.index', pattern: 'staff.gate.*', permission: 'queue.checkin' },
+        { label: 'بارگیری', name: 'staff.loading.index', pattern: 'staff.loading.*', permission: 'queue.start-loading' },
         { label: 'باسکول', name: 'staff.weighbridge.index', pattern: 'staff.weighbridge.*', permission: 'weighing.record' },
         { label: 'داشبورد', name: 'staff.dashboard', pattern: 'staff.dashboard', permission: 'dashboard.view' },
         { label: 'گزارش‌ها', name: 'staff.reports', pattern: 'staff.reports', permission: 'reports.view' },

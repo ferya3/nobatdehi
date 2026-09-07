@@ -8,6 +8,7 @@ use App\Http\Controllers\Staff\Catalog\TruckTypeController;
 use App\Http\Controllers\Staff\DashboardController;
 use App\Http\Controllers\Staff\GateController;
 use App\Http\Controllers\Staff\HomeController;
+use App\Http\Controllers\Staff\LoadingController;
 use App\Http\Controllers\Staff\LoginController;
 use App\Http\Controllers\Staff\QueueController;
 use App\Http\Controllers\Staff\ReportController;
@@ -80,6 +81,12 @@ Route::prefix('panel')->name('staff.')->group(function () {
         Route::post('/gate/scan', [GateController::class, 'scan'])->name('gate.scan');
         Route::post('/gate/lookup', [GateController::class, 'lookup'])->name('gate.lookup');
         Route::post('/gate/{appointment}/check-in', [GateController::class, 'checkIn'])->name('gate.check-in');
+
+        // لاین بارگیری
+        Route::get('/loading', [LoadingController::class, 'index'])->name('loading.index');
+        Route::post('/loading/scan', [LoadingController::class, 'scan'])->name('loading.scan');
+        Route::post('/loading/{appointment}/transition', [LoadingController::class, 'transition'])
+            ->name('loading.transition');
 
         // باسکول اول و دوم
         Route::get('/weighbridge', [WeighbridgeController::class, 'index'])->name('weighbridge.index');

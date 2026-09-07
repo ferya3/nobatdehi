@@ -22,6 +22,9 @@ class Appointment extends Model
 {
     use HasUlids;
 
+    /** چند برابرِ مدت مورد انتظار، «تأخیر» حساب می‌شود */
+    public const LATE_FACTOR = 1.5;
+
     protected $guarded = ['id'];
 
     /** ULID فقط برای ستون عمومی، نه کلید اصلی */
@@ -185,6 +188,21 @@ class Appointment extends Model
     public function noShowDueAt(): CarbonImmutable
     {
         return $this->startsAt()->addMinutes($this->graceMinutes());
+    }
+
+    /**
+     * آیا بارگیری از مدت مورد انتظارِ این نوع کامیون گذشته است؟
+     *
+     * آستانه عمداً ۱.۵ برابر است، نه دقیقاً برابر: هشداری که برای هر کامیونِ
+     * چند دقیقه دیرتر روشن شود، بعد از یک روز دیگر کسی نگاهش نمی‌کند.
+     */
+    public function isLoadingLate(): bool
+    {
+        if ($this->status !== AppointmentStatus::Loading || $this->loading_started_at === null) {
+            return false;
+        }
+
+        return $this->loading_started_at->diffInMinutes(now()) > $this->expectedLoadingMinutes() * self::LATE_FACTOR;
     }
 
     /** مدت انتظار: از ورود تا شروع بارگیری (دقیقه) */

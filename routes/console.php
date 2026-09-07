@@ -10,3 +10,6 @@ Schedule::command('appointments:expire')->dailyAt('00:20');
 
 // مهلت حضور که گذشت، ظرفیت همان روز باید آزاد شود — نه فردا شب
 Schedule::command('appointments:no-show')->everyFiveMinutes()->withoutOverlapping();
+
+// کامیونی که روی لاین مانده، تا کسی خبردار نشود همان‌جا می‌ماند
+Schedule::command('loading:alert-delays')->everyTenMinutes()->withoutOverlapping();
