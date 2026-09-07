@@ -174,13 +174,30 @@ function refresh() {
     router.reload({ only: ['appointments', 'counters'] });
 }
 
+/**
+ * برگشتن به تب، خودش یک درخواست تازه است.
+ *
+ * refresh() وقتی صفحه پنهان است کاری نمی‌کند — درست هم همین است. ولی بدون
+ * این، اپراتوری که به پنجره‌ی دیگری رفته و برگشته، تا تیکِ بعدیِ ۲۰ ثانیه‌ای
+ * یک صف کهنه می‌بیند و فکر می‌کند نوبتی ثبت نشده.
+ */
+function onVisible() {
+    if (!document.hidden) refresh();
+}
+
 onMounted(() => {
     if (!props.isToday) return;
+
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onVisible);
 
     poller = setInterval(refresh, 20_000);
 });
 
 onUnmounted(() => {
+    document.removeEventListener('visibilitychange', onVisible);
+    window.removeEventListener('focus', onVisible);
+
     if (poller) clearInterval(poller);
 });
 
@@ -197,7 +214,21 @@ watch(connected, (isLive) => {
         <div class="space-y-5">
             <div class="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                    <h1 class="text-lg font-bold text-slate-900">مدیریت صف کامیون‌ها</h1>
+                    <h1 class="flex items-center gap-2 text-lg font-bold text-slate-900">
+                        مدیریت صف کامیون‌ها
+                        <!-- اتصال زنده‌ی خراب باید دیده شود، نه اینکه بی‌صدا به صفِ کهنه ختم شود -->
+                        <span
+                            v-if="isToday"
+                            :title="connected ? 'به‌روزرسانی زنده برقرار است' : 'اتصال زنده برقرار نیست؛ هر ۲۰ ثانیه تازه می‌شود'"
+                            :class="[
+                                'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium',
+                                connected ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-800',
+                            ]"
+                        >
+                            <span :class="['size-2 rounded-full', connected ? 'bg-emerald-500' : 'bg-amber-500']" aria-hidden="true" />
+                            {{ connected ? 'زنده' : 'هر ۲۰ ثانیه' }}
+                        </span>
+                    </h1>
                     <p class="mt-0.5 flex items-center gap-2 text-sm text-slate-500">
                         <span>{{ jalaliDate }}</span>
                         <span v-if="isToday" class="text-brand-600">· امروز</span>

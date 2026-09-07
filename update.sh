@@ -253,6 +253,29 @@ check_output "اجبار تغییر رمز پیش‌فرض فعال است" \
 
 check "فرمان هشدار امنیتی موجود است" "$PHP_BIN artisan security:alert --dry-run"
 
+# --- زنده بودن صف ---
+
+# اطلاع‌رسانی به پنل نباید در listener صف‌شده باشد؛ اگر برگردد، خوابیدن
+# Horizon دوباره پنل اپراتور را بی‌صدا کور می‌کند.
+check_output "اطلاع‌رسانی صف مستقل از worker است" \
+    "grep -c 'implements' '$APP_DIR/app/Listeners/BroadcastNewAppointment.php' || true" \
+    "0"
+
+if [[ "$SYSTEMD_OK" == "yes" ]]; then
+    if systemctl is-active --quiet nobatdehi-horizon.service; then
+        ok "✓ Horizon در حال اجراست (پیامک‌ها ارسال می‌شوند)"
+    else
+        warn "✗ Horizon اجرا نمی‌شود — پیامک‌ها ارسال نمی‌شوند"
+        FAILED=1
+    fi
+
+    if systemctl is-active --quiet nobatdehi-reverb.service; then
+        ok "✓ Reverb در حال اجراست (به‌روزرسانی زنده‌ی پنل)"
+    else
+        warn "! Reverb اجرا نمی‌شود — پنل هر ۲۰ ثانیه تازه می‌شود، نه لحظه‌ای"
+    fi
+fi
+
 if grep -q '^SESSION_ENCRYPT=true' "$APP_DIR/.env"; then
     ok "✓ نشست رمزنگاری‌شده است"
 else

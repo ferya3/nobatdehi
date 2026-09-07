@@ -8,7 +8,6 @@ use App\Domain\Queue\QueueService;
 use App\Domain\Sms\ManagerRecipients;
 use App\Domain\Sms\SmsService;
 use App\Events\AppointmentCreated;
-use App\Events\QueueChanged;
 use App\Models\Appointment;
 use App\Support\Digits;
 use App\Support\Jalali;
@@ -64,12 +63,5 @@ class NotifyOnAppointmentCreated implements ShouldQueue
         foreach (ManagerRecipients::all() as $recipient) {
             $this->sms->queueTemplate('appointment.created.manager', $recipient, $variables, $appointment);
         }
-
-        QueueChanged::dispatch(
-            $appointment->factory_id,
-            $appointment->date->toDateString(),
-            $appointment->number,
-            $appointment->status->value,
-        );
     }
 }

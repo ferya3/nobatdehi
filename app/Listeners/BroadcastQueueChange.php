@@ -4,21 +4,21 @@ declare(strict_types=1);
 
 namespace App\Listeners;
 
-use App\Events\AppointmentTransitioned;
 use App\Events\AppointmentStatusChanged;
+use App\Events\AppointmentTransitioned;
 use App\Events\QueueChanged;
 use App\Models\Appointment;
-use Illuminate\Contracts\Queue\ShouldQueue;
+use Throwable;
 
 /**
- * هر تغییر وضعیت را به پنل‌های باز اطلاع می‌دهد.
+ * هر تغییر وضعیت را بلافاصله به پنل‌های باز اطلاع می‌دهد.
  *
- * صف‌شده است تا کندی یا خرابی WebSocket، ثبت وضعیت توسط اپراتور را کند نکند.
+ * صف‌شده نیست: اگر بود، خوابیدنِ worker یعنی پنل اپراتور بی‌صدا از کار
+ * می‌افتد. به‌جایش خطای انتشار گرفته و گزارش می‌شود تا کندی یا خرابی
+ * WebSocket، ثبت وضعیت توسط اپراتور را خراب نکند.
  */
-class BroadcastQueueChange implements ShouldQueue
+class BroadcastQueueChange
 {
-    public int $tries = 3;
-
     public function handle(AppointmentTransitioned $event): void
     {
         $appointment = Appointment::with('loadingPoint')->find($event->appointmentId);
@@ -27,19 +27,24 @@ class BroadcastQueueChange implements ShouldQueue
             return;
         }
 
-        QueueChanged::dispatch(
-            $appointment->factory_id,
-            $appointment->date->toDateString(),
-            $appointment->number,
-            $appointment->status->value,
-        );
+        try {
+            QueueChanged::dispatch(
+                $appointment->factory_id,
+                $appointment->date->toDateString(),
+                $appointment->number,
+                $appointment->status->value,
+            );
 
-        AppointmentStatusChanged::dispatch(
-            $appointment->driver_id,
-            $appointment->ulid,
-            $appointment->status->value,
-            $appointment->status->label(),
-            $appointment->loadingPoint?->name,
-        );
+            AppointmentStatusChanged::dispatch(
+                $appointment->driver_id,
+                $appointment->ulid,
+                $appointment->status->value,
+                $appointment->status->label(),
+                $appointment->loadingPoint?->name,
+            );
+        } catch (Throwable $e) {
+            // Reverb در دسترس نیست: وضعیت ثبت شده و همان مهم است
+            report($e);
+        }
     }
 }

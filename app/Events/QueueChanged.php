@@ -6,7 +6,7 @@ namespace App\Events;
 
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PrivateChannel;
-use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
+use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
@@ -16,8 +16,14 @@ use Illuminate\Queue\SerializesModels;
  * عمداً هیچ داده‌ای جز شناسه‌ها حمل نمی‌کند: پنل با دریافت این رویداد خودش
  * داده‌ی تازه را می‌گیرد. اینطور نه payload حساسی از کانال عبور می‌کند و نه
  * لازم است شکل داده در دو جا نگه داشته شود.
+ *
+ * ShouldBroadcastNow و نه ShouldBroadcast: زنده بودنِ صف نباید به بالا بودنِ
+ * worker وابسته باشد. با ShouldBroadcast، خودِ انتشار هم یک job در صف
+ * می‌شود و اگر Horizon خوابیده باشد پنل اپراتور بی‌صدا از کار می‌افتد —
+ * همان حالتی که هیچ خطایی هم نشان نمی‌دهد. payload چند شناسه است و انتشار
+ * یک درخواست محلی به Reverb؛ ارزش صف‌کردن ندارد.
  */
-class QueueChanged implements ShouldBroadcast
+class QueueChanged implements ShouldBroadcastNow
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
