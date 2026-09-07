@@ -4,12 +4,17 @@ declare(strict_types=1);
 
 namespace App\Domain\Appointment\Data;
 
-use App\Models\AppointmentSlot;
 use App\Models\Driver;
 use App\Models\Factory;
 use App\Models\Product;
 use App\Models\Truck;
 
+/**
+ * درخواست نوبت — بدون ساعت.
+ *
+ * ساعت عمداً اینجا نیست: راننده آن را انتخاب نمی‌کند و کسی هم نمی‌تواند در
+ * درخواست تحمیلش کند. زمان‌بند داخل قفلِ روز حسابش می‌کند.
+ */
 final class NewAppointment
 {
     public function __construct(
@@ -17,7 +22,6 @@ final class NewAppointment
         public readonly Driver $driver,
         public readonly Truck $truck,
         public readonly Product $product,
-        public readonly AppointmentSlot $slot,
         public readonly ?string $idempotencyKey = null,
         public readonly ?int $createdByUserId = null,
         public readonly ?string $ip = null,

@@ -104,7 +104,6 @@ final class ProductManagementTest extends TestCase
             $this->factory,
             $this->makeDriver('09123456789'),
             $this->makeTruck('12', 'ب', '345', '11'),
-            $this->futureSlot($this->factory),
             $product,
         ));
 

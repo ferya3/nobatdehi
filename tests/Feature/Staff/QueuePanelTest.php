@@ -36,13 +36,11 @@ final class QueuePanelTest extends TestCase
 
     private function todayAppointment(string $mobile = '09123456789', string $two = '12'): Appointment
     {
-        $slot = $this->futureSlot($this->factory);
 
         $appointment = app(CreateAppointment::class)($this->booking(
             $this->factory,
             $this->makeDriver($mobile),
             $this->makeTruck($two, 'ب', '345', '67'),
-            $slot,
         ));
 
         // به امروز منتقلش می‌کنیم تا در صف امروز دیده شود
@@ -104,7 +102,6 @@ final class QueuePanelTest extends TestCase
 
         $this->assertSame(S::Completed, $appointment->status);
         $this->assertSame($line->id, $appointment->loading_point_id);
-        $this->assertSame(0, $appointment->slot->fresh()->reserved_count);
     }
 
     #[Test]
@@ -249,7 +246,6 @@ final class QueuePanelTest extends TestCase
         $this->artisan('appointments:expire')->assertSuccessful();
 
         $this->assertSame(S::Expired, $appointment->fresh()->status);
-        $this->assertSame(0, $appointment->slot->fresh()->reserved_count);
         $this->assertDatabaseHas('appointment_transitions', [
             'appointment_id' => $appointment->id,
             'to_status' => S::Expired->value,

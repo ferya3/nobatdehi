@@ -77,7 +77,6 @@ final class ScaleBridgeTest extends TestCase
             $this->factory,
             $this->driver,
             $this->makeTruck('12', 'ب', '345', '11'),
-            $this->todaySlot($this->factory),
         ));
 
         $appointment->forceFill([

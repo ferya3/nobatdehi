@@ -113,7 +113,7 @@ export interface Appointment {
     priority_reason?: string | null;
     schedule?: {
         loading_minutes: number;
-        queue_minutes: number;
+        starts_in_minutes: number;
         starts_at: string;
         ends_at: string;
     } | null;
@@ -130,21 +130,28 @@ export interface Appointment {
     } | null;
 }
 
-export interface SlotOption {
-    id: number;
-    start_time: string;
-    end_time: string;
-    capacity: number;
-    reserved: number;
-    remaining: number;
-    selectable: boolean;
-}
-
-export interface DayOption {
+/**
+ * نوبتی که سامانه اعلام می‌کند.
+ *
+ * راننده انتخابش نمی‌کند — می‌بیند. جای SlotOption و DayOption را گرفت،
+ * که وقتی انتخابی در کار نیست، دیگر معنایی ندارند.
+ */
+export interface OpeningOption {
     date: string;
     jalali: string;
-    jalali_label: string;
+    jalali_long: string;
+    day_label: string;
     is_today: boolean;
-    is_open: boolean;
-    remaining: number;
+    starts_at: string;
+    ends_at: string;
+    loading_minutes: number;
+}
+
+export interface TruckTypeOption {
+    id: number;
+    name: string;
+    capacity_tons: string | null;
+    loading_minutes: number;
+    /** null یعنی تا انتهای افق نوبت‌دهی برای این خودرو جا نیست */
+    opening: OpeningOption | null;
 }

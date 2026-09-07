@@ -242,6 +242,22 @@ check_output "ارجاع وزن به خواندن باسکول هست" \
 
 check "فرمان پاک‌سازی عددهای باسکول موجود است" "$PHP_BIN artisan scale-readings:prune --help"
 
+# --- زمان‌بندی نوبت و ساعت سرور ---
+
+check_output "ستون لاین بارگیری روی نوبت‌ها هست" \
+    "$PHP_BIN artisan tinker --execute='echo Schema::hasColumn(\"appointments\",\"line_no\") ? \"HAS-IT\" : \"MISSING\";'" \
+    "HAS-IT"
+
+# ساعت اشتباه یعنی نوبت ۰۷:۰۰ برای راننده ۰۳:۳۰ نوشته می‌شود
+check_output "ساعت سرور روی تهران است" \
+    "$PHP_BIN artisan tinker --execute='echo config(\"app.timezone\");'" \
+    "Asia/Tehran"
+
+# بدون namespace نوشته شده: بک‌اسلش از سه لایه‌ی نقل‌قول سالم رد نمی‌شود
+check_output "قالب پیامک لغو برای مدیر ثبت شده" \
+    "$PHP_BIN artisan tinker --execute='echo DB::table(\"sms_templates\")->where(\"key\",\"appointment.cancelled.manager\")->exists() ? \"HAS-IT\" : \"MISSING\";'" \
+    "HAS-IT"
+
 ASSET_AGE="$(( $(date +%s) - $(stat -c %Y "$APP_DIR/public/build/manifest.json" 2>/dev/null || echo 0) ))"
 
 if [[ "$SKIP_BUILD" == "no" && "$ASSET_AGE" -gt 600 ]]; then
@@ -267,9 +283,22 @@ cat <<'NOTE'
     Ctrl+Shift+R (روی موبایل: بستن و باز کردن دوباره‌ی صفحه) لازم است تا
     نسخه‌ی تازه برداشته شود.
 
-    این نسخه: اتصال نشان‌دهنده‌ی باسکول
+    این نسخه: نوبت‌دهی خودکار، ساعت تهران، و پیامک لغو به مدیر
 
     /panel/settings/devices  (با دسترسی «تنظیمات» — مثلاً مدیر کارخانه)
+
+    ۱) راننده دیگر روز و ساعت انتخاب نمی‌کند. سامانه ترتیب را اعلام می‌کند:
+       اولین نوبتِ روز از ساعت باز شدن کارخانه، و هر نوبت بعدی از جایی که
+       نوبت قبلیِ همان لاین تمام می‌شود. مدت هر نوبت از «انواع کامیون»
+       می‌آید — پس /panel/truck-types را یک بار مرور کنید.
+
+    ۲) تعداد لاین‌های بارگیری در /panel/settings تعیین می‌کند چند کامیون
+       هم‌زمان بارگیری می‌شوند. عدد اشتباه یعنی صفِ اشتباه.
+
+    ۳) پیامک لغو به مدیر فعال شد — از هر دو طرف، راننده و اپراتور.
+       شماره‌ها در /panel/settings/sms («شماره‌های مدیران»).
+
+    ۴) ساعت سرور روی Asia/Tehran تنظیم شد.
 
     برای وصل‌کردن باسکول:
 

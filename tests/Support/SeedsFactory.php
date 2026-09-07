@@ -127,11 +127,16 @@ trait SeedsFactory
         return $record->refresh();
     }
 
+    /**
+     * درخواست نوبت — بدون ساعت.
+     *
+     * پارامتر اسلات حذف شد چون دیگر کسی اسلات انتخاب نمی‌کند؛ زمان‌بند
+     * سمت سرور تعیینش می‌کند.
+     */
     protected function booking(
         Factory $factory,
         Driver $driver,
         Truck $truck,
-        AppointmentSlot $slot,
         ?Product $product = null,
         ?string $idempotencyKey = null,
     ): NewAppointment {
@@ -140,7 +145,6 @@ trait SeedsFactory
             driver: $driver,
             truck: $truck,
             product: $product ?? Product::where('factory_id', $factory->id)->firstOrFail(),
-            slot: $slot,
             idempotencyKey: $idempotencyKey,
             ip: '127.0.0.1',
         );

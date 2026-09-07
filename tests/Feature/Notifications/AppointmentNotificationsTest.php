@@ -15,7 +15,7 @@ use App\Events\AppointmentTransitioned;
 use App\Events\QueueChanged;
 use App\Listeners\BroadcastQueueChange;
 use App\Listeners\NotifyDriverWhenCalled;
-use App\Listeners\NotifyDriverWhenCancelled;
+use App\Listeners\NotifyOnAppointmentCancelled;
 use App\Listeners\NotifyOnAppointmentCreated;
 use App\Models\Appointment;
 use App\Models\Setting;
@@ -44,13 +44,12 @@ final class AppointmentNotificationsTest extends TestCase
         Setting::putMany(['sms_provider' => 'console']);
     }
 
-    private function book(string $mobile = '09123456789'): Appointment
+    private function book(string $mobile = '09123456789', string $plateTwo = '12'): Appointment
     {
         return app(CreateAppointment::class)($this->booking(
             $this->factory,
             $this->makeDriver($mobile),
-            $this->makeTruck('12', 'ب', '345', '67'),
-            $this->futureSlot($this->factory),
+            $this->makeTruck($plateTwo, 'ب', '345', '67'),
         ));
     }
 
@@ -149,7 +148,7 @@ final class AppointmentNotificationsTest extends TestCase
 
         app(TransitionAppointment::class)($appointment, S::Cancelled, Actor::user($manager), 'تعطیلی اضطراری');
 
-        app(NotifyDriverWhenCancelled::class)->handle(
+        app(NotifyOnAppointmentCancelled::class)->handle(
             new AppointmentTransitioned($appointment->id, S::Booked->value, S::Cancelled->value),
         );
 
@@ -167,11 +166,70 @@ final class AppointmentNotificationsTest extends TestCase
 
         app(TransitionAppointment::class)($appointment, S::Cancelled, Actor::driver($driver), 'لغو توسط راننده');
 
-        app(NotifyDriverWhenCancelled::class)->handle(
+        app(NotifyOnAppointmentCancelled::class)->handle(
             new AppointmentTransitioned($appointment->id, S::Booked->value, S::Cancelled->value),
         );
 
         $this->assertSame(0, SmsMessage::where('template_key', 'appointment.cancelled')->count());
+    }
+
+    #[Test]
+    public function the_manager_hears_about_a_cancellation_from_either_side(): void
+    {
+        Setting::putMany(['sms_manager_recipients' => '09121112233, 09124445566']);
+
+        $byFactory = $this->book();
+        $manager = User::role(Roles::FACTORY_MANAGER)->firstOrFail();
+
+        // بدون صدا زدنِ دستیِ Listener: رویداد خودش آن را اجرا می‌کند، و
+        // همین است که در تولید اتفاق می‌افتد.
+        app(TransitionAppointment::class)($byFactory, S::Cancelled, Actor::user($manager), 'تعطیلی اضطراری');
+
+        // هر دو شماره‌ی مدیر خبر می‌گیرند
+        foreach (['09121112233', '09124445566'] as $recipient) {
+            $this->assertDatabaseHas('sms_messages', [
+                'to' => $recipient,
+                'template_key' => 'appointment.cancelled.manager',
+            ]);
+        }
+
+        $byDriver = $this->book('09120000055', '55');
+
+        app(TransitionAppointment::class)($byDriver, S::Cancelled, Actor::driver($byDriver->driver), 'کامیون خراب شد');
+
+        // لغو توسط راننده هم به مدیر می‌رسد — همان چیزی که قبلاً بی‌صدا بود
+        $this->assertSame(
+            4,
+            SmsMessage::where('template_key', 'appointment.cancelled.manager')->count(),
+        );
+
+        // ...ولی به خود راننده پیامکِ «نوبتت لغو شد» فرستاده نمی‌شود
+        $this->assertSame(
+            0,
+            SmsMessage::where('template_key', 'appointment.cancelled')
+                ->where('related_id', $byDriver->id)
+                ->count(),
+        );
+    }
+
+    #[Test]
+    public function the_managers_cancellation_sms_says_who_cancelled_it(): void
+    {
+        Setting::putMany(['sms_manager_recipients' => '09121112233']);
+
+        $appointment = $this->book();
+
+        app(TransitionAppointment::class)(
+            $appointment,
+            S::Cancelled,
+            Actor::driver($appointment->driver),
+            'کامیون خراب شد',
+        );
+
+        $body = SmsMessage::where('template_key', 'appointment.cancelled.manager')->value('body');
+
+        $this->assertStringContainsString('راننده', $body);
+        $this->assertStringContainsString('کامیون خراب شد', $body);
     }
 
     #[Test]

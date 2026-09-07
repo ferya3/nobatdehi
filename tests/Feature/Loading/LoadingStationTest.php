@@ -64,7 +64,6 @@ final class LoadingStationTest extends TestCase
             $this->factory,
             $this->makeDriver('09123456789'),
             $truck->refresh(),
-            $this->todaySlot($this->factory),
         ));
 
         $appointment = app(TransitionAppointment::class)($appointment, AppointmentStatus::CheckedIn, Actor::system());

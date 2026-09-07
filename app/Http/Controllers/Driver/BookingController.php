@@ -7,27 +7,31 @@ namespace App\Http\Controllers\Driver;
 use App\Domain\Appointment\Actions\CreateAppointment;
 use App\Domain\Appointment\Data\NewAppointment;
 use App\Domain\Appointment\Exceptions\BookingException;
-use App\Domain\Slot\AvailabilityService;
+use App\Domain\Slot\OpeningPreview;
+use App\Domain\Truck\PlateNumber;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Driver\StoreAppointmentRequest;
-use App\Models\AppointmentSlot;
 use App\Models\Driver;
 use App\Models\Factory;
 use App\Models\Product;
 use App\Models\Truck;
 use App\Models\TruckType;
-use App\Support\Jalali;
-use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
+/**
+ * نوبت‌گیری راننده.
+ *
+ * راننده روز و ساعت انتخاب نمی‌کند. سه چیز می‌دهد — خودرو، بار، هویت — و
+ * سامانه در جواب می‌گوید نوبتش کِی است. کارخانه مطب دکتر نیست؛ صف است.
+ */
 class BookingController extends Controller
 {
     public function __construct(
-        private readonly AvailabilityService $availability,
+        private readonly OpeningPreview $preview,
         private readonly CreateAppointment $createAppointment,
     ) {}
 
@@ -49,8 +53,6 @@ class BookingController extends Controller
             );
         }
 
-        $selectedDate = $this->requestedDate($request, $factory);
-
         $lastTruck = $driver->trucks()
             ->with('truckType')
             ->orderByPivot('last_used_at', 'desc')
@@ -63,30 +65,19 @@ class BookingController extends Controller
                 'plate' => $lastTruck->plate(),
                 'truck_type_id' => $lastTruck->truck_type_id,
             ] : null,
-            // مدت بارگیری همین‌جا به راننده گفته می‌شود، نه بعد از ثبت نوبت:
-            // «تریلی حدود ۴۰ دقیقه» روی کارتِ انتخاب، خودش یک تصمیم است.
-            'truckTypes' => TruckType::where('is_active', true)
-                ->orderBy('sort_order')
-                ->get(['id', 'name', 'capacity_tons', 'loading_minutes'])
-                ->map(fn (TruckType $t) => [
-                    'id' => $t->id,
-                    'name' => $t->name,
-                    'capacity_tons' => $t->capacity_tons,
-                    'loading_minutes' => $t->loading_minutes ?? (int) $factory->avg_loading_minutes,
-                ]),
+
+            // هر نوع خودرو با نوبتی که همین حالا به آن می‌رسد. مدت بارگیری
+            // فقط یک عدد روی کارت نیست — همان است که جای نوبت را تعیین می‌کند.
+            'truckTypes' => $this->preview->forTruckTypes(
+                $factory,
+                TruckType::where('is_active', true)->orderBy('sort_order')->get(),
+            ),
+
             'products' => Product::where('factory_id', $factory->id)
                 ->active()
                 ->orderBy('sort_order')
                 ->get(['id', 'name', 'load_tons', 'description']),
-            'days' => $this->availability->days($factory),
-            'plateLetters' => \App\Domain\Truck\PlateNumber::LETTERS,
-
-            // ساعت‌های یک روز با partial reload روی همین مسیر گرفته می‌شوند:
-            // router.reload({ only: ['slots'], data: { date } })
-            'selectedDate' => $selectedDate?->toDateString(),
-            'slots' => $selectedDate
-                ? $this->availability->slotsForDate($factory, $selectedDate)
-                : [],
+            'plateLetters' => PlateNumber::LETTERS,
         ]);
     }
 
@@ -99,7 +90,6 @@ class BookingController extends Controller
             return redirect()->route('driver.home')->with('error', 'در حال حاضر نوبت‌دهی فعال نیست.');
         }
 
-        $slot = AppointmentSlot::findOrFail($request->integer('slot_id'));
         $product = Product::findOrFail($request->integer('product_id'));
 
         $truck = Truck::fromPlate($request->plate(), $request->integer('truck_type_id'));
@@ -124,42 +114,21 @@ class BookingController extends Controller
                 driver: $driver,
                 truck: $truck,
                 product: $product,
-                slot: $slot,
                 idempotencyKey: $request->string('idempotency_key')->toString(),
                 ip: $request->ip(),
                 userAgent: $request->userAgent(),
             ));
         } catch (BookingException $e) {
+            // «جا نیست» به نوع خودرو می‌چسبد، چون تنها چیزی که راننده می‌تواند
+            // عوضش کند تا جا باز شود، همان است.
             throw ValidationException::withMessages([
-                // خطای ظرفیت به فیلد ساعت می‌چسبد تا راننده بداند کجا را عوض کند
-                in_array($e->reason, ['slot_full', 'slot_blocked', 'slot_past', 'slot_out_of_horizon'], true)
-                    ? 'slot_id'
-                    : 'plate_two' => $e->getMessage(),
+                $e->reason === 'no_opening' ? 'truck_type_id' : 'plate_two' => $e->getMessage(),
             ]);
         }
 
         return redirect()
             ->route('driver.appointments.show', $appointment)
             ->with('success', 'نوبت شما با موفقیت ثبت شد.');
-    }
-
-    /** تاریخ درخواستی، محدود به افق نوبت‌دهی */
-    private function requestedDate(Request $request, Factory $factory): ?CarbonImmutable
-    {
-        $raw = $request->string('date')->toString();
-
-        if ($raw === '' || ! preg_match('/^\d{4}-\d{2}-\d{2}$/', $raw)) {
-            return null;
-        }
-
-        $date = CarbonImmutable::parse($raw)->startOfDay();
-        $last = CarbonImmutable::today()->addDays($factory->booking_horizon_days);
-
-        if ($date->lessThan(CarbonImmutable::today()) || $date->greaterThan($last)) {
-            return null;
-        }
-
-        return $date;
     }
 
     private function driver(Request $request): Driver
