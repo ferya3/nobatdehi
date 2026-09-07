@@ -8,6 +8,16 @@ import type { PageProps } from '@/types';
 import { router, useForm, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 
+interface RecentScaleReading {
+    id: number;
+    scale: string;
+    device: string | null;
+    weight_kg: number;
+    is_stable: boolean;
+    raw_frame: string | null;
+    at: string | null;
+}
+
 interface RecentReading {
     id: number;
     source_label: string;
@@ -29,11 +39,17 @@ const props = defineProps<{
         gate_anpr_enabled: boolean;
         gate_anpr_min_confidence: number;
         gate_reading_retention_days: number;
+        scale_device_enabled: boolean;
+        scale_require_stable: boolean;
+        scale_reading_retention_days: number;
     };
     tokenIsSet: boolean;
+    scaleTokenIsSet: boolean;
     endpoint: string;
+    scaleEndpoint: string;
     headerName: string;
     recent: RecentReading[];
+    recentScale: RecentScaleReading[];
 }>();
 
 const page = usePage<PageProps>();
@@ -41,6 +57,7 @@ const flash = computed(() => page.props.flash);
 
 // توکن تازه فقط همین یک بار در flash می‌آید و بعد دیگر قابل دیدن نیست
 const freshToken = computed(() => (page.props.flash as Record<string, unknown>).token as string | undefined);
+const freshTokenKind = computed(() => (page.props.flash as Record<string, unknown>).tokenKind as string | undefined);
 
 const copied = ref(false);
 const copyFailed = ref(false);
@@ -52,14 +69,16 @@ function save() {
     form.put(route('staff.settings.devices.update'), { preserveScroll: true });
 }
 
-function rotate() {
+function rotate(kind: 'gate' | 'scale') {
     rotating.value = true;
     router.post(
         route('staff.settings.devices.token'),
-        {},
+        { kind },
         { preserveScroll: true, onFinish: () => (rotating.value = false) },
     );
 }
+
+const kg = (value: number) => value.toLocaleString('en-US');
 
 async function copy(value: string) {
     const ok = await copyText(value);
@@ -84,9 +103,11 @@ async function copy(value: string) {
 
             <!-- توکن تازه: یک بار نشان داده می‌شود و تمام -->
             <div v-if="freshToken" class="rounded-2xl border border-amber-300 bg-amber-50 p-5">
-                <p class="text-sm font-semibold text-amber-900">توکن تازه‌ی دوربین</p>
+                <p class="text-sm font-semibold text-amber-900">
+                    توکن تازه‌ی {{ freshTokenKind === 'scale' ? 'پلِ باسکول' : 'دوربین' }}
+                </p>
                 <p class="mt-1 text-xs text-amber-800">
-                    همین حالا در تنظیمات دوربین بگذارید. بعد از خروج از این صفحه دیگر نمایش داده نمی‌شود.
+                    همین حالا در تنظیمات دستگاه بگذارید. بعد از خروج از این صفحه دیگر نمایش داده نمی‌شود.
                 </p>
                 <div class="mt-3 flex gap-2">
                     <code class="min-w-0 flex-1 truncate rounded-lg bg-white px-3 py-2.5 text-xs text-slate-800">
@@ -191,7 +212,7 @@ async function copy(value: string) {
                     </p>
 
                     <div class="mt-4 flex items-center gap-3">
-                        <AppButton variant="secondary" :loading="rotating" @click="rotate">
+                        <AppButton variant="secondary" :loading="rotating" @click="rotate('gate')">
                             {{ tokenIsSet ? 'ساخت توکن تازه' : 'ساخت توکن' }}
                         </AppButton>
                         <p class="text-xs" :class="tokenIsSet ? 'text-emerald-700' : 'text-amber-700'">
@@ -225,6 +246,97 @@ async function copy(value: string) {
                 >
                     <input
                         v-model.number="form.gate_reading_retention_days"
+                        type="number"
+                        min="1"
+                        max="365"
+                        class="num w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                    />
+                </FormField>
+            </section>
+
+            <!-- پلِ نشان‌دهنده‌ی باسکول -->
+            <section class="card space-y-4 p-5">
+                <h2 class="text-sm font-semibold text-slate-700">باسکول</h2>
+
+                <label class="flex items-start gap-2.5">
+                    <input
+                        v-model="form.scale_device_enabled"
+                        type="checkbox"
+                        class="mt-0.5 size-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                    />
+                    <span class="text-sm">
+                        <span class="font-medium text-slate-800">دریافت وزن از نشان‌دهنده</span>
+                        <span class="mt-0.5 block text-xs text-slate-500">
+                            پلِ باسکول روی کامپیوترِ اتاقک اجرا می‌شود، پورت COM را می‌خواند و
+                            عدد را می‌فرستد. تا وقتی این خاموش است، مسیرش ۴۰۴ می‌دهد و اپراتور
+                            وزن را دستی وارد می‌کند.
+                        </span>
+                    </span>
+                </label>
+
+                <label class="flex items-start gap-2.5">
+                    <input
+                        v-model="form.scale_require_stable"
+                        type="checkbox"
+                        class="mt-0.5 size-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                    />
+                    <span class="text-sm">
+                        <span class="font-medium text-slate-800">فقط وزن پایدار ثبت شود</span>
+                        <span class="mt-0.5 block text-xs text-slate-500">
+                            تا عقربه آرام نگرفته، دکمه‌ی ثبت باز نمی‌شود. اگر نشان‌دهنده‌ی شما
+                            پرچم پایداری نمی‌فرستد این را خاموش کنید — وگرنه هیچ وزنی ثبت
+                            نخواهد شد.
+                        </span>
+                    </span>
+                </label>
+
+                <div class="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm">
+                    <p class="font-medium text-slate-700">تنظیماتی که در پل وارد می‌شود</p>
+
+                    <dl class="mt-3 space-y-2.5">
+                        <div>
+                            <dt class="text-xs text-slate-500">آدرس (POST)</dt>
+                            <dd class="mt-1 flex gap-2">
+                                <code class="min-w-0 flex-1 truncate rounded-lg bg-white px-3 py-2 text-xs">{{ scaleEndpoint }}</code>
+                                <button
+                                    type="button"
+                                    class="shrink-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs"
+                                    @click="copy(scaleEndpoint)"
+                                >
+                                    کپی
+                                </button>
+                            </dd>
+                        </div>
+                        <div>
+                            <dt class="text-xs text-slate-500">هدر احراز هویت</dt>
+                            <dd class="mt-1">
+                                <code class="rounded-lg bg-white px-3 py-2 text-xs">{{ headerName }}: &lt;توکن&gt;</code>
+                            </dd>
+                        </div>
+                    </dl>
+
+                    <p class="mt-3 text-xs text-slate-500">
+                        این‌ها در <code class="num">bridge/scale/config.json</code> روی کامپیوترِ باسکول
+                        گذاشته می‌شوند. راهنمای کامل در <code class="num">bridge/scale/README.md</code> است.
+                    </p>
+
+                    <div class="mt-4 flex items-center gap-3">
+                        <AppButton variant="secondary" :loading="rotating" @click="rotate('scale')">
+                            {{ scaleTokenIsSet ? 'ساخت توکن تازه' : 'ساخت توکن' }}
+                        </AppButton>
+                        <p class="text-xs" :class="scaleTokenIsSet ? 'text-emerald-700' : 'text-amber-700'">
+                            {{ scaleTokenIsSet ? 'توکن تنظیم شده است.' : 'هنوز توکنی ساخته نشده.' }}
+                        </p>
+                    </div>
+                </div>
+
+                <FormField
+                    label="مدت نگهداری خواندن‌های باسکول (روز)"
+                    :error="form.errors.scale_reading_retention_days"
+                    hint="عددهایی که به حواله‌ای گره نخورده‌اند بعد از این مدت پاک می‌شوند. وزنِ ثبت‌شده‌ی هر حواله با خودش می‌ماند."
+                >
+                    <input
+                        v-model.number="form.scale_reading_retention_days"
                         type="number"
                         min="1"
                         max="365"
@@ -281,6 +393,50 @@ async function copy(value: string) {
                         >
                             نوبت {{ reading.appointment }}
                         </span>
+                    </li>
+                </ul>
+            </section>
+
+            <!-- «پل وصل است؟» با تیک تنظیمات جواب داده نمی‌شود -->
+            <section class="card overflow-hidden">
+                <div class="border-b border-slate-100 px-5 py-4">
+                    <h2 class="text-sm font-semibold text-slate-700">آخرین عددهای باسکول</h2>
+                    <p class="mt-1 text-xs text-slate-500">
+                        اگر پل درست کار کند، اینجا ردیف تازه می‌بینید — حتی وقتی باسکول خالی است.
+                    </p>
+                </div>
+
+                <p v-if="recentScale.length === 0" class="px-5 py-8 text-center text-sm text-slate-500">
+                    هنوز عددی از باسکول نرسیده است.
+                </p>
+
+                <ul v-else class="divide-y divide-slate-100">
+                    <li v-for="reading in recentScale" :key="reading.id" class="flex items-center gap-3 px-5 py-3">
+                        <span
+                            :class="[
+                                'size-2.5 shrink-0 rounded-full',
+                                reading.is_stable ? 'bg-emerald-500' : 'bg-amber-400',
+                            ]"
+                            aria-hidden="true"
+                        />
+                        <div class="min-w-0 flex-1">
+                            <p class="num text-sm font-medium text-slate-800" dir="ltr">
+                                {{ kg(reading.weight_kg) }}
+                                <span class="text-xs font-normal text-slate-500">kg</span>
+                            </p>
+                            <p class="num text-xs text-slate-500">
+                                {{ reading.at }} — {{ reading.scale }}
+                                <span v-if="reading.device"> / {{ reading.device }}</span>
+                            </p>
+                        </div>
+                        <!-- فریم خام: وقتی پارسر اشتباه بخواند، اینجا معلوم می‌شود -->
+                        <code
+                            v-if="reading.raw_frame"
+                            class="shrink-0 max-w-[40%] truncate rounded bg-slate-50 px-2 py-1 text-xs text-slate-500"
+                            dir="ltr"
+                        >
+                            {{ reading.raw_frame }}
+                        </code>
                     </li>
                 </ul>
             </section>

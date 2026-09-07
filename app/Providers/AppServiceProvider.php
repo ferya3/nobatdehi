@@ -65,5 +65,16 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('gate-capture', fn (Request $request) => [
             Limit::perMinute(60)->by('user:'.($request->user()?->id ?? $request->ip())),
         ]);
+
+        /*
+         * پل باسکول: بازتر از دوربین.
+         *
+         * وزن مدام عوض می‌شود و پل فقط تغییرها را می‌فرستد؛ کامیونی که روی
+         * باسکول می‌ایستد در چند ثانیه ده‌ها عدد تولید می‌کند تا آرام بگیرد.
+         * سقف اینجا برای مهار پلی است که خراب شده و در حلقه افتاده.
+         */
+        RateLimiter::for('scale-reading', fn (Request $request) => [
+            Limit::perMinute(600)->by($request->ip()),
+        ]);
     }
 }

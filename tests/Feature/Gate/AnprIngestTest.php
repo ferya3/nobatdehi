@@ -7,7 +7,7 @@ namespace Tests\Feature\Gate;
 use App\Domain\Gate\GateDevices;
 use App\Domain\Gate\PlateCapture;
 use App\Domain\Audit\SecurityLogger;
-use App\Http\Middleware\VerifyGateDeviceToken;
+use App\Http\Middleware\VerifyDeviceToken;
 use App\Models\Factory;
 use App\Models\PlateReading;
 use App\Models\Setting;
@@ -63,14 +63,14 @@ final class AnprIngestTest extends TestCase
         $this->enable();
 
         $this->postJson(route('api.gate.anpr'), ['plate' => '12ب34511'], [
-            VerifyGateDeviceToken::HEADER => 'not-the-token',
+            VerifyDeviceToken::GATE_HEADER => 'not-the-token',
         ])->assertUnauthorized();
 
         $this->assertSame(0, PlateReading::count());
 
         $this->assertDatabaseHas('security_logs', [
             'event' => SecurityLogger::PERMISSION_DENIED,
-            'identifier' => 'gate.anpr',
+            'identifier' => 'device.gate',
         ]);
     }
 
@@ -84,7 +84,7 @@ final class AnprIngestTest extends TestCase
             'confidence' => 93,
             'lane' => 'ورودی شمالی',
             'device' => 'cam-north',
-        ], [VerifyGateDeviceToken::HEADER => 'device-token-for-tests'])
+        ], [VerifyDeviceToken::GATE_HEADER => 'device-token-for-tests'])
             ->assertCreated()
             ->assertJson(['recognised' => true]);
 
@@ -106,7 +106,7 @@ final class AnprIngestTest extends TestCase
         $this->postJson(route('api.gate.anpr'), [
             'plate' => '???',
             'confidence' => 20,
-        ], [VerifyGateDeviceToken::HEADER => 'device-token-for-tests'])
+        ], [VerifyDeviceToken::GATE_HEADER => 'device-token-for-tests'])
             ->assertCreated()
             ->assertJson(['recognised' => false]);
 
@@ -127,7 +127,7 @@ final class AnprIngestTest extends TestCase
         $this->postJson(route('api.gate.anpr'), [
             'plate' => '12ب34511',
             'image' => 'data:image/jpeg;base64,'.base64_encode($jpeg),
-        ], [VerifyGateDeviceToken::HEADER => 'device-token-for-tests'])->assertCreated();
+        ], [VerifyDeviceToken::GATE_HEADER => 'device-token-for-tests'])->assertCreated();
 
         $fromJson = PlateReading::firstOrFail();
         $this->assertNotNull($fromJson->image_path);
@@ -136,7 +136,7 @@ final class AnprIngestTest extends TestCase
         $this->post(route('api.gate.anpr'), [
             'plate' => '12ب34511',
             'image_file' => UploadedFile::fake()->image('plate.jpg'),
-        ], [VerifyGateDeviceToken::HEADER => 'device-token-for-tests'])->assertCreated();
+        ], [VerifyDeviceToken::GATE_HEADER => 'device-token-for-tests'])->assertCreated();
 
         $fromUpload = PlateReading::latest('id')->firstOrFail();
         $this->assertNotNull($fromUpload->image_path);
@@ -151,7 +151,7 @@ final class AnprIngestTest extends TestCase
         $this->postJson(route('api.gate.anpr'), [
             'plate' => '12ب34511',
             'image' => base64_encode('<?php echo "not an image";'),
-        ], [VerifyGateDeviceToken::HEADER => 'device-token-for-tests'])->assertCreated();
+        ], [VerifyDeviceToken::GATE_HEADER => 'device-token-for-tests'])->assertCreated();
 
         // خواندن ثبت می‌شود ولی فایل نه — دوربینی که PHP می‌فرستد دوربین نیست
         $this->assertNull(PlateReading::firstOrFail()->image_path);
@@ -165,7 +165,7 @@ final class AnprIngestTest extends TestCase
         $this->postJson(route('api.gate.anpr'), [
             'plate' => '12ب34511',
             'captured_at' => 'دیروز ساعت پنج',
-        ], [VerifyGateDeviceToken::HEADER => 'device-token-for-tests'])->assertCreated();
+        ], [VerifyDeviceToken::GATE_HEADER => 'device-token-for-tests'])->assertCreated();
 
         $reading = PlateReading::firstOrFail();
 

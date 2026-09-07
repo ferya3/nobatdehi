@@ -28,3 +28,7 @@ Thumbs.db
 
 /public/build
 /public/hot
+
+# پل باسکول: تنظیمات هر نصب فرق دارد و توکن دارد
+/bridge/*/config.json
+/bridge/*/node_modules

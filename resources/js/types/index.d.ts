@@ -61,6 +61,17 @@ export interface PlateReading {
     clock: string | null;
 }
 
+/** آخرین عددِ یک باسکول، همان‌طور که صفحه‌ی باسکول می‌بیندش */
+export interface ScaleLive {
+    id: number;
+    scale: string;
+    weight_kg: number;
+    /** عقربه آرام گرفته؟ عددِ ناپایدار ثبت نمی‌شود */
+    is_stable: boolean;
+    read_at: string | null;
+    clock: string | null;
+}
+
 export type StatusTone =
     | 'booked'
     | 'waiting'

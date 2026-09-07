@@ -1,0 +1,18 @@
+{
+  "name": "nobatdehi-scale-bridge",
+  "version": "1.0.0",
+  "private": true,
+  "description": "پل بین نشان‌دهنده‌ی باسکول (پورت COM) و سامانه‌ی نوبت‌دهی",
+  "type": "commonjs",
+  "main": "bridge.js",
+  "scripts": {
+    "sniff": "node bridge.js --sniff",
+    "start": "node bridge.js"
+  },
+  "dependencies": {
+    "serialport": "^12.0.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

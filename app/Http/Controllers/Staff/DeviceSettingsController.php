@@ -7,11 +7,13 @@ namespace App\Http\Controllers\Staff;
 use App\Domain\Access\Permissions;
 use App\Domain\Audit\AuditLogger;
 use App\Domain\Gate\GateDevices;
+use App\Domain\Weighbridge\ScaleDevices;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\AppointmentResource;
-use App\Http\Middleware\VerifyGateDeviceToken;
+use App\Http\Middleware\VerifyDeviceToken;
 use App\Http\Requests\Staff\UpdateGateDevicesRequest;
 use App\Models\PlateReading;
+use App\Models\ScaleReading;
 use App\Models\Setting;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -19,16 +21,17 @@ use Inertia\Inertia;
 use Inertia\Response;
 
 /**
- * تنظیمات دستگاه‌های گیت: بارکدخوان، دوربین ایستگاه، دوربین پلاک‌خوان.
+ * تنظیمات دستگاه‌های میدانی: بارکدخوان، دوربین‌ها، و پلِ باسکول.
  *
- * صفحه عمداً فهرست خواندن‌های اخیر را هم نشان می‌دهد. «دوربین وصل است؟»
+ * صفحه عمداً فهرست خواندن‌های اخیر را هم نشان می‌دهد. «دستگاه وصل است؟»
  * سؤالی است که با تیکِ سبزِ تنظیمات جواب داده نمی‌شود — با دیدنِ اینکه در
- * ده دقیقه‌ی گذشته چیزی فرستاده یا نه جواب داده می‌شود.
+ * چند دقیقه‌ی گذشته چیزی فرستاده یا نه جواب داده می‌شود.
  */
-class GateDeviceController extends Controller
+class DeviceSettingsController extends Controller
 {
     public function __construct(
         private readonly GateDevices $devices,
+        private readonly ScaleDevices $scales,
         private readonly AuditLogger $audit,
     ) {}
 
@@ -38,19 +41,26 @@ class GateDeviceController extends Controller
 
         $values = Setting::values();
 
-        return Inertia::render('Staff/GateDevices', [
+        return Inertia::render('Staff/Devices', [
             'settings' => [
                 'gate_barcode_enabled' => $values['gate_barcode_enabled'] === '1',
                 'gate_station_camera_enabled' => $values['gate_station_camera_enabled'] === '1',
                 'gate_anpr_enabled' => $values['gate_anpr_enabled'] === '1',
                 'gate_anpr_min_confidence' => (int) $values['gate_anpr_min_confidence'],
                 'gate_reading_retention_days' => (int) $values['gate_reading_retention_days'],
+
+                'scale_device_enabled' => $values['scale_device_enabled'] === '1',
+                'scale_require_stable' => $values['scale_require_stable'] === '1',
+                'scale_reading_retention_days' => (int) $values['scale_reading_retention_days'],
             ],
             // خودِ توکن هرگز به Frontend نمی‌رود؛ فقط اینکه ساخته شده یا نه
             'tokenIsSet' => $this->devices->hasToken(),
+            'scaleTokenIsSet' => $this->scales->hasToken(),
             'endpoint' => url('/api/gate/anpr'),
-            'headerName' => VerifyGateDeviceToken::HEADER,
+            'scaleEndpoint' => url('/api/weighbridge/reading'),
+            'headerName' => VerifyDeviceToken::HEADER,
             'recent' => $this->recent(),
+            'recentScale' => $this->recentScale(),
         ]);
     }
 
@@ -73,6 +83,24 @@ class GateDeviceController extends Controller
         return back()->with('success', 'تنظیمات دستگاه‌های گیت ذخیره شد.');
     }
 
+    /** @return array<int, array<string, mixed>> */
+    private function recentScale(): array
+    {
+        return ScaleReading::latest('read_at')
+            ->limit(20)
+            ->get()
+            ->map(fn (ScaleReading $reading) => [
+                'id' => $reading->id,
+                'scale' => $reading->scale_name,
+                'device' => $reading->device_name,
+                'weight_kg' => (float) $reading->weight_kg,
+                'is_stable' => $reading->is_stable,
+                'raw_frame' => $reading->raw_frame,
+                'at' => $reading->read_at?->format('Y-m-d H:i:s'),
+            ])
+            ->all();
+    }
+
     /**
      * ساخت توکن تازه برای دوربین.
      *
@@ -84,20 +112,26 @@ class GateDeviceController extends Controller
     {
         $this->authorizeSettings($request);
 
-        $token = $this->devices->rotateToken();
+        // یک مسیر، دو خانواده‌ی دستگاه. توکن‌ها جدا هستند تا چرخاندنِ توکن
+        // دوربین، باسکول را از کار نیندازد.
+        $scale = $request->string('kind')->toString() === 'scale';
+
+        $token = $scale ? $this->scales->rotateToken() : $this->devices->rotateToken();
 
         $this->audit->log(
-            action: 'ROTATE_GATE_DEVICE_TOKEN',
+            action: $scale ? 'ROTATE_SCALE_DEVICE_TOKEN' : 'ROTATE_GATE_DEVICE_TOKEN',
             entity: $request->user(),
             oldValues: [],
             newValues: ['rotated_at' => now()->toIso8601String()],
             request: $request,
         );
 
-        return back()->with('token', $token)->with(
-            'success',
-            'توکن تازه ساخته شد. آن را در تنظیمات دوربین بگذارید — دیگر نمایش داده نمی‌شود.',
-        );
+        $where = $scale ? 'پلِ باسکول' : 'دوربین';
+
+        return back()
+            ->with('token', $token)
+            ->with('tokenKind', $scale ? 'scale' : 'gate')
+            ->with('success', "توکن تازه ساخته شد. آن را در تنظیمات {$where} بگذارید — دیگر نمایش داده نمی‌شود.");
     }
 
     /** @return array<int, array<string, mixed>> */

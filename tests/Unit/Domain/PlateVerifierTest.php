@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Domain;
 
+use App\Domain\Devices\DeviceTokens;
 use App\Domain\Gate\GateDevices;
 use App\Domain\Gate\PlateVerdict;
 use App\Domain\Gate\PlateVerifier;
@@ -37,7 +38,7 @@ final class PlateVerifierTest extends TestCase
             60,
         );
 
-        return new PlateVerifier(new GateDevices());
+        return new PlateVerifier(new GateDevices(new DeviceTokens()));
     }
 
     private function appointment(string $plateKey = '12-ب-345-11'): Appointment

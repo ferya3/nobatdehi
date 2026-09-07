@@ -1,0 +1,25 @@
+{
+  "url": "http://192.168.1.10/api/weighbridge/reading",
+  "token": "همان توکنی که در /panel/settings/devices ساخته می‌شود",
+  "deviceName": "weighbridge-pc",
+  "unit": "kg",
+  "minGapMs": 400,
+
+  "scales": [
+    {
+      "name": "ورودی",
+      "port": "COM4",
+      "protocol": "raw",
+      "baudRate": 9600,
+      "dataBits": 8,
+      "parity": "none",
+      "stopBits": 1
+    },
+    {
+      "name": "خروجی",
+      "port": "COM5",
+      "protocol": "raw",
+      "baudRate": 9600
+    }
+  ]
+}

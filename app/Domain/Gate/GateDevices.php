@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Domain\Gate;
 
+use App\Domain\Devices\DeviceTokens;
 use App\Models\Setting;
-use Illuminate\Support\Str;
 
 /**
  * تنظیمات دستگاه‌های گیت.
@@ -17,6 +17,8 @@ use Illuminate\Support\Str;
 final class GateDevices
 {
     public const TOKEN_SETTING = 'gate_anpr_token';
+
+    public function __construct(private readonly DeviceTokens $tokens) {}
 
     /** سقف حجم عکسِ دوربین — دستگاهِ خراب تا پرشدن دیسک می‌فرستد */
     private const MAX_IMAGE_KB = 4096;
@@ -59,40 +61,27 @@ final class GateDevices
         return self::MAX_IMAGE_KB * 1024;
     }
 
+    // توکن‌ها یک جا نگهداری می‌شوند تا دوربین و باسکول یک مکانیزم داشته
+    // باشند، نه دو تا که با هم فرق کوچکی دارند و همان فرق روزی مسئله شود.
+
     public function token(): string
     {
-        return Setting::get(self::TOKEN_SETTING);
+        return $this->tokens->token(DeviceTokens::GATE);
     }
 
     public function hasToken(): bool
     {
-        return $this->token() !== '';
+        return $this->tokens->hasToken(DeviceTokens::GATE);
     }
 
-    /**
-     * مقایسه‌ی توکن دستگاه.
-     *
-     * hash_equals و نه === : مقایسه‌ی معمولی رشته به‌محض اولین بایتِ متفاوت
-     * برمی‌گردد و همان اختلاف زمان، حدس‌زدن توکن را ممکن می‌کند.
-     */
     public function tokenMatches(?string $candidate): bool
     {
-        $token = $this->token();
-
-        if ($token === '' || $candidate === null || $candidate === '') {
-            return false;
-        }
-
-        return hash_equals($token, $candidate);
+        return $this->tokens->matches(DeviceTokens::GATE, $candidate);
     }
 
     /** توکن تازه می‌سازد و ذخیره می‌کند — مقدارِ خام فقط همین یک بار برمی‌گردد */
     public function rotateToken(): string
     {
-        $token = Str::random(48);
-
-        Setting::putMany([self::TOKEN_SETTING => $token]);
-
-        return $token;
+        return $this->tokens->rotate(DeviceTokens::GATE);
     }
 }

@@ -33,7 +33,7 @@ class Setting extends Model
     private const CACHE_KEY = 'settings.all';
 
     /** کلیدهایی که رمزنگاری‌شده ذخیره می‌شوند */
-    public const SECRET_KEYS = ['sms_password', 'sms_api_key', 'gate_anpr_token'];
+    public const SECRET_KEYS = ['sms_password', 'sms_api_key', 'gate_anpr_token', 'scale_device_token'];
 
     public const DEFAULTS = [
         'sms_enabled' => '1',
@@ -57,6 +57,13 @@ class Setting extends Model
         'gate_anpr_token' => '',
         'gate_anpr_min_confidence' => '70',
         'gate_reading_retention_days' => '30',
+
+        // پل نرم‌افزاریِ نشان‌دهنده‌ی باسکول
+        'scale_device_enabled' => '0',
+        'scale_device_token' => '',
+        // عددِ ناپایدار (عقربه هنوز نوسان دارد) ثبت نمی‌شود
+        'scale_require_stable' => '1',
+        'scale_reading_retention_days' => '30',
     ];
 
     /** همه‌ی تنظیمات (پیش‌فرض + ذخیره‌شده) با رمزگشایی اسرار */

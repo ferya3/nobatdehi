@@ -7,9 +7,10 @@ import QrScanner from '@/components/QrScanner.vue';
 import StatusBadge from '@/components/StatusBadge.vue';
 import TextInput from '@/components/TextInput.vue';
 import StaffLayout from '@/layouts/StaffLayout.vue';
-import type { Appointment, PageProps } from '@/types';
+import { useLiveChannel } from '@/lib/useLiveChannel';
+import type { Appointment, PageProps, ScaleLive } from '@/types';
 import { router, useForm, usePage } from '@inertiajs/vue3';
-import { computed, ref, watch } from 'vue';
+import { computed, onUnmounted, ref, watch } from 'vue';
 
 interface Weighing {
     empty_weight_kg: string | null;
@@ -28,9 +29,16 @@ type Found = Appointment & {
 };
 
 const props = defineProps<{
+    factoryId: number;
+    scaleEnabled: boolean;
+    requireStable: boolean;
+    scales: ScaleLive[];
     pending: { tare: number; gross: number };
     result?: { error: string | null; appointment: Found | null };
 }>();
+
+/** فاصله‌ی polling وقتی اتصال زنده نداریم — وزن سریع عوض می‌شود */
+const POLL_MS = 2000;
 
 const page = usePage<PageProps>();
 const flash = computed(() => page.props.flash);
@@ -41,10 +49,17 @@ const found = computed(() => props.result?.appointment ?? null);
 const error = computed(() => props.result?.error ?? null);
 const stage = computed(() => found.value?.stage ?? null);
 
-const form = useForm<{ stage: string; weight_kg: string; source: string; photo: File | null }>({
+const form = useForm<{
+    stage: string;
+    weight_kg: string;
+    reading_id: number | null;
+    manual_reason: string;
+    photo: File | null;
+}>({
     stage: 'tare',
     weight_kg: '',
-    source: 'manual',
+    reading_id: null,
+    manual_reason: '',
     photo: null,
 });
 
@@ -52,18 +67,103 @@ watch(stage, (value) => {
     if (value) form.stage = value;
 });
 
+// ---------------------------------------------------------- عددِ زنده‌ی باسکول
+
+const scales = ref<ScaleLive[]>(props.scales ?? []);
+const selectedScale = ref<string>(props.scales?.[0]?.scale ?? '');
+const manualMode = ref(!props.scaleEnabled);
+
+watch(
+    () => props.scales,
+    (fresh) => applyScales(fresh ?? []),
+);
+
+function applyScales(fresh: ScaleLive[]) {
+    scales.value = fresh;
+
+    // اپراتور یک بار باسکولش را انتخاب می‌کند و بعد دست نمی‌زند
+    if (!fresh.some((s) => s.scale === selectedScale.value)) {
+        selectedScale.value = fresh[0]?.scale ?? '';
+    }
+}
+
+const live = computed(() => scales.value.find((s) => s.scale === selectedScale.value) ?? null);
+
+/** عددی که با زدن «ثبت» واقعاً ذخیره می‌شود */
+const usableReading = computed(() => {
+    const reading = live.value;
+
+    if (!reading) return null;
+    if (props.requireStable && !reading.is_stable) return null;
+
+    return reading;
+});
+
+const { connected } = useLiveChannel(props.scaleEnabled ? `factory.${props.factoryId}.weighbridge` : null, {
+    'scale.read': () => refreshScales(),
+});
+
+let poll: number | null = null;
+
+function schedulePoll() {
+    if (poll !== null) window.clearTimeout(poll);
+    if (!props.scaleEnabled) return;
+
+    // اتصال زنده که برقرار باشد، polling فقط تور ایمنی است
+    poll = window.setTimeout(
+        () => refreshScales().finally(schedulePoll),
+        connected.value ? POLL_MS * 10 : POLL_MS,
+    );
+}
+
+async function refreshScales() {
+    try {
+        const response = await fetch(route('staff.weighbridge.readings'), {
+            headers: { Accept: 'application/json' },
+            credentials: 'same-origin',
+        });
+
+        if (!response.ok) return;
+
+        const data = (await response.json()) as { scales: ScaleLive[] };
+        applyScales(data.scales);
+    } catch {
+        // شبکه‌ی اتاقک باسکول قطع و وصل می‌شود؛ دفعه‌ی بعد دوباره تلاش می‌کنیم
+    }
+}
+
+if (props.scaleEnabled) schedulePoll();
+
+onUnmounted(() => {
+    if (poll !== null) window.clearTimeout(poll);
+});
+
 const kg = (value: string | number | null | undefined) =>
     value === null || value === undefined ? '—' : Number(value).toLocaleString('en-US');
 
 // وزن خالص را همین‌جا هم نشان می‌دهیم تا اپراتور پیش از ثبت ببیند چه می‌شود.
 // مرجع همچنان سرور است؛ این فقط پیش‌نمایش است.
+/** عددی که ثبت خواهد شد — از باسکول، یا از دستِ اپراتور */
+const effectiveWeight = computed(() =>
+    manualMode.value ? Number(form.weight_kg) : (usableReading.value?.weight_kg ?? 0),
+);
+
 const previewNet = computed(() => {
     const tare = Number(found.value?.weighing?.empty_weight_kg ?? 0);
-    const gross = Number(form.weight_kg);
+    const gross = effectiveWeight.value;
 
     if (stage.value !== 'gross' || !tare || !gross || gross <= tare) return null;
 
     return gross - tare;
+});
+
+/** دکمه‌ی ثبت کِی باز است */
+const canSubmit = computed(() => {
+    if (manualMode.value) {
+        return Number(form.weight_kg) > 0 && form.manual_reason.trim().length >= 8;
+    }
+
+    return usableReading.value !== null;
 });
 
 const previewOverload = computed(
@@ -77,16 +177,21 @@ function onDetected(token: string) {
 function submit() {
     if (!found.value) return;
 
+    // یا شناسه‌ی خواندن می‌رود یا عددِ تایپ‌شده — هرگز هر دو. سرور هم
+    // وقتی شناسه ببیند، عددِ فرم را اصلاً نگاه نمی‌کند.
+    form.reading_id = manualMode.value ? null : (usableReading.value?.id ?? null);
+
     form.post(route('staff.weighbridge.record', found.value.ulid), {
         preserveScroll: true,
         forceFormData: true,
-        onSuccess: () => form.reset('weight_kg', 'photo'),
+        onSuccess: () => form.reset('weight_kg', 'manual_reason', 'photo'),
     });
 }
 
 function reset() {
     scanner.value?.stop();
     form.reset();
+    manualMode.value = !props.scaleEnabled;
     router.get(route('staff.weighbridge.index'));
 }
 </script>
@@ -170,38 +275,113 @@ function reset() {
                             {{ stage === 'tare' ? 'باسکول اول — توزین خالی' : 'باسکول دوم — توزین پر' }}
                         </h2>
 
-                        <FormField label="وزن (کیلوگرم)" for="weight_kg" :error="form.errors.weight_kg">
-                            <TextInput
-                                id="weight_kg"
-                                v-model="form.weight_kg"
-                                inputmode="numeric"
-                                dir="ltr"
-                                placeholder="14500"
-                                :invalid="!!form.errors.weight_kg"
-                            />
-                        </FormField>
-
-                        <FormField label="منبع وزن" :error="form.errors.source">
-                            <div class="grid grid-cols-2 gap-2">
-                                <button
-                                    v-for="option in [
-                                        { value: 'device', label: 'مستقیم از باسکول' },
-                                        { value: 'manual', label: 'ورود دستی' },
+                        <!-- عددِ زنده‌ی نشان‌دهنده -->
+                        <div v-if="scaleEnabled && !manualMode" class="space-y-3">
+                            <div class="flex items-center justify-between">
+                                <p class="text-sm font-medium text-slate-700">عدد باسکول</p>
+                                <span
+                                    :class="[
+                                        'rounded-full px-2.5 py-1 text-xs font-medium',
+                                        connected ? 'bg-emerald-100 text-emerald-900' : 'bg-slate-100 text-slate-600',
                                     ]"
-                                    :key="option.value"
+                                >
+                                    {{ connected ? 'اتصال زنده' : 'به‌روزرسانی دوره‌ای' }}
+                                </span>
+                            </div>
+
+                            <!-- وقتی چند باسکول هست، اپراتور باید بداند کدام -->
+                            <div v-if="scales.length > 1" class="grid grid-cols-2 gap-2">
+                                <button
+                                    v-for="option in scales"
+                                    :key="option.scale"
                                     type="button"
                                     :class="[
-                                        'rounded-xl border px-3 py-2.5 text-sm font-medium transition',
-                                        form.source === option.value
+                                        'rounded-xl border px-3 py-2 text-sm font-medium transition',
+                                        selectedScale === option.scale
                                             ? 'border-brand-500 bg-brand-50 text-brand-800'
                                             : 'border-slate-300 text-slate-600 hover:bg-slate-50',
                                     ]"
-                                    @click="form.source = option.value"
+                                    @click="selectedScale = option.scale"
                                 >
-                                    {{ option.label }}
+                                    {{ option.scale }}
                                 </button>
                             </div>
-                        </FormField>
+
+                            <div
+                                :class="[
+                                    'rounded-2xl border-2 p-5 text-center transition',
+                                    live === null
+                                        ? 'border-slate-200 bg-slate-50'
+                                        : live.is_stable
+                                          ? 'border-emerald-300 bg-emerald-50'
+                                          : 'border-amber-300 bg-amber-50',
+                                ]"
+                            >
+                                <p v-if="live === null" class="py-3 text-sm text-slate-500">
+                                    از باسکول عددی نمی‌رسد. اتصال پل و کابل را بررسی کنید.
+                                </p>
+
+                                <template v-else>
+                                    <p class="num text-4xl font-bold tabular-nums text-slate-900" dir="ltr">
+                                        {{ kg(live.weight_kg) }}
+                                    </p>
+                                    <p class="mt-1 text-xs text-slate-500">کیلوگرم</p>
+                                    <p
+                                        class="mt-2 text-xs font-medium"
+                                        :class="live.is_stable ? 'text-emerald-800' : 'text-amber-800'"
+                                    >
+                                        {{ live.is_stable ? 'عقربه آرام گرفته' : 'هنوز نوسان دارد — صبر کنید' }}
+                                        <span class="num text-slate-500">· {{ live.clock }}</span>
+                                    </p>
+                                </template>
+                            </div>
+
+                            <button
+                                type="button"
+                                class="text-xs font-medium text-slate-500 underline underline-offset-4 hover:text-slate-700"
+                                @click="manualMode = true"
+                            >
+                                باسکول کار نمی‌کند؟ وزن را دستی وارد کنید
+                            </button>
+                        </div>
+
+                        <!-- ورود دستی: باز است، ولی بی‌سروصدا نیست -->
+                        <template v-else>
+                            <FormField label="وزن (کیلوگرم)" for="weight_kg" :error="form.errors.weight_kg">
+                                <TextInput
+                                    id="weight_kg"
+                                    v-model="form.weight_kg"
+                                    inputmode="numeric"
+                                    dir="ltr"
+                                    placeholder="14500"
+                                    :invalid="!!form.errors.weight_kg"
+                                />
+                            </FormField>
+
+                            <FormField
+                                v-if="scaleEnabled"
+                                label="دلیل ورود دستی"
+                                for="manual_reason"
+                                :error="form.errors.manual_reason"
+                                hint="در لاگ امنیتی به نام شما ثبت می‌شود."
+                            >
+                                <TextInput
+                                    id="manual_reason"
+                                    v-model="form.manual_reason"
+                                    placeholder="مثلاً کابل باسکول قطع بود و عدد از روی نشان‌دهنده خوانده شد"
+                                    :invalid="!!form.errors.manual_reason"
+                                />
+                            </FormField>
+
+                            <button
+                                v-if="scaleEnabled"
+                                type="button"
+                                class="text-xs font-medium text-slate-500 underline underline-offset-4 hover:text-slate-700"
+                                @click="manualMode = false"
+                            >
+                                بازگشت به خواندن از باسکول
+                            </button>
+                        </template>
 
                         <FormField
                             label="عکس لحظه‌ی توزین"
@@ -227,7 +407,7 @@ function reset() {
                             وزن خالص: <span class="num font-bold">{{ kg(previewNet) }}</span> کیلوگرم
                         </AlertBox>
 
-                        <AppButton size="lg" :loading="form.processing" :disabled="!form.weight_kg" @click="submit">
+                        <AppButton size="lg" :loading="form.processing" :disabled="!canSubmit" @click="submit">
                             ثبت وزن
                         </AppButton>
                     </template>

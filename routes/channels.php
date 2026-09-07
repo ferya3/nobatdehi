@@ -32,6 +32,11 @@ Broadcast::channel('factory.{factoryId}.gate', function (User $user, int $factor
     return $user->can(Permissions::QUEUE_CHECKIN) && $user->belongsToFactory($factoryId);
 });
 
+// عددِ زنده‌ی باسکول
+Broadcast::channel('factory.{factoryId}.weighbridge', function (User $user, int $factoryId) {
+    return $user->can(Permissions::WEIGHING_RECORD) && $user->belongsToFactory($factoryId);
+});
+
 // وضعیت نوبت یک راننده — فقط خود راننده
 Broadcast::channel('driver.{driverId}', function (Driver $driver, int $driverId) {
     return $driver->id === $driverId;

@@ -10,14 +10,18 @@ use App\Domain\Appointment\Support\QrToken;
 use App\Domain\Audit\AuditLogger;
 use App\Domain\Audit\SecurityLogger;
 use App\Domain\Weighbridge\ExitPermit;
+use App\Domain\Weighbridge\ScaleDevices;
 use App\Domain\Weighbridge\WeighingService;
+use App\Domain\Weighbridge\WeightSource;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Staff\RecordWeightRequest;
 use App\Http\Resources\AppointmentResource;
 use App\Models\Appointment;
 use App\Models\Factory;
 use App\Models\LoadingRecord;
+use App\Models\ScaleReading;
 use Carbon\CarbonImmutable;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -38,6 +42,7 @@ class WeighbridgeController extends Controller
         private readonly WeighingService $weighing,
         private readonly AuditLogger $audit,
         private readonly SecurityLogger $security,
+        private readonly ScaleDevices $scales,
     ) {}
 
     public function index(Request $request): Response
@@ -82,9 +87,10 @@ class WeighbridgeController extends Controller
         abort_unless($appointment->factory_id === $this->factory($request)->id, 404);
 
         $stage = $request->string('stage')->toString();
-        $weight = round((float) $request->input('weight_kg'), 2);
 
-        $record = LoadingRecord::firstOrCreate(['appointment_id' => $appointment->id]);
+        // ردیف را عمداً هنوز نمی‌سازیم: توزینی که رد می‌شود نباید یک ردیفِ
+        // خالیِ loading_records پشت سرش بگذارد که بعداً کسی نداند چیست.
+        $record = LoadingRecord::firstWhere('appointment_id', $appointment->id);
 
         $blocked = $this->rejectOutOfOrder($appointment, $record, $stage);
 
@@ -92,11 +98,62 @@ class WeighbridgeController extends Controller
             return back()->with('error', $blocked);
         }
 
+        $source = $this->weightFrom($request);
+
+        if ($source->isRejected()) {
+            return back()->with('error', $source->error);
+        }
+
+        $record ??= LoadingRecord::create(['appointment_id' => $appointment->id]);
+
+        // ورود دستی وقتی باسکول وصل است، یعنی یا دستگاه خراب شده یا کسی
+        // دور می‌زند. هر دو حالت باید جایی ثبت شوند که بعداً دیده شود.
+        if ($source->kind === WeightSource::MANUAL && $this->scales->enabled()) {
+            $this->security->log(
+                SecurityLogger::ADMIN_ACTION,
+                $appointment->ulid,
+                $appointment,
+                ['at' => 'weighbridge', 'stage' => $stage, 'reason' => $source->manualReason],
+                $request,
+            );
+        }
+
         $photo = $request->file('photo')?->store("weighbridge/{$appointment->ulid}", 'public');
 
         return $stage === 'tare'
-            ? $this->recordTare($request, $appointment, $record, $weight, $photo)
-            : $this->recordGross($request, $appointment, $record, $weight, $photo);
+            ? $this->recordTare($request, $appointment, $record, $source, $photo)
+            : $this->recordGross($request, $appointment, $record, $source, $photo);
+    }
+
+    /**
+     * وزن از کدام مرجع می‌آید.
+     *
+     * وقتی شناسه‌ی خواندن آمده باشد، عددِ فرم اصلاً خوانده نمی‌شود — سرور
+     * از روی همان ردیف برمی‌دارد. این تنها راهی است که «مستقیم از باسکول»
+     * چیزی بیش از یک ادعا باشد.
+     */
+    private function weightFrom(RecordWeightRequest $request): WeightSource
+    {
+        $readingId = $request->integer('reading_id');
+
+        if ($readingId > 0) {
+            $reading = ScaleReading::find($readingId);
+
+            if ($reading === null) {
+                return WeightSource::rejected('عدد باسکول پیدا نشد. دوباره بگیرید.');
+            }
+
+            return WeightSource::resolve(
+                $reading,
+                $this->factory($request),
+                $this->scales->requireStable(),
+            );
+        }
+
+        return WeightSource::fromOperator(
+            round((float) $request->input('weight_kg'), 2),
+            $request->string('manual_reason')->trim()->toString(),
+        );
     }
 
     /**
@@ -105,10 +162,10 @@ class WeighbridgeController extends Controller
      * توزینِ دوباره‌ی یک مرحله بسته است: «اصلاح وزن خالی» بعد از بارگیری،
      * دقیقاً همان حفره‌ای است که وزن خالص را دلخواه می‌کند.
      */
-    private function rejectOutOfOrder(Appointment $appointment, LoadingRecord $record, string $stage): ?string
+    private function rejectOutOfOrder(Appointment $appointment, ?LoadingRecord $record, string $stage): ?string
     {
         if ($stage === 'tare') {
-            if ($record->hasTare()) {
+            if ($record?->hasTare()) {
                 return 'وزن خالی این حواله قبلاً ثبت شده است. تغییرش فقط با مسئول شیفت ممکن است.';
             }
 
@@ -117,11 +174,11 @@ class WeighbridgeController extends Controller
                 : 'توزین خالی وقتی انجام می‌شود که کامیون وارد محوطه شده و هنوز بارگیری نشده باشد.';
         }
 
-        if ($record->hasGross()) {
+        if ($record?->hasGross()) {
             return 'وزن پر این حواله قبلاً ثبت شده است.';
         }
 
-        if (! $record->hasTare()) {
+        if (! $record?->hasTare()) {
             return 'اول باید وزن خالی ثبت شده باشد.';
         }
 
@@ -134,23 +191,33 @@ class WeighbridgeController extends Controller
         Request $request,
         Appointment $appointment,
         LoadingRecord $record,
-        float $weight,
+        WeightSource $source,
         ?string $photo,
     ): RedirectResponse {
         $record->forceFill([
-            'empty_weight_kg' => $weight,
+            'empty_weight_kg' => $source->weightKg,
             'tare_weighed_at' => now(),
-            'tare_source' => $request->string('source')->toString(),
+            'tare_source' => $source->kind,
+            'tare_reading_id' => $source->reading?->id,
+            'tare_manual_reason' => $source->manualReason,
             'tare_photo_path' => $photo,
             'tare_by_user_id' => $request->user()->id,
             'waybill_number' => $record->waybill_number ?? $appointment->number,
             'expected_net_kg' => $this->weighing->expectedNetKg($appointment),
         ])->save();
 
+        // خواندن به همین حواله گره می‌خورد تا در سابقه پیدا شود
+        $source->reading?->forceFill(['appointment_id' => $appointment->id])->save();
+
         $this->audit->log(
             action: 'RECORD_TARE_WEIGHT',
             entity: $record,
-            newValues: ['empty_weight_kg' => $weight, 'source' => $request->input('source')],
+            newValues: [
+                'empty_weight_kg' => $source->weightKg,
+                'source' => $source->kind,
+                'reading_id' => $source->reading?->id,
+                'manual_reason' => $source->manualReason,
+            ],
             request: $request,
         );
 
@@ -161,17 +228,21 @@ class WeighbridgeController extends Controller
         Request $request,
         Appointment $appointment,
         LoadingRecord $record,
-        float $weight,
+        WeightSource $source,
         ?string $photo,
     ): RedirectResponse {
         $appointment->loadMissing(['product', 'truck.truckType', 'factory']);
+
+        $weight = $source->weightKg;
 
         $result = $this->weighing->evaluate($appointment, (float) $record->empty_weight_kg, $weight);
 
         $record->forceFill([
             'loaded_weight_kg' => $weight,
             'gross_weighed_at' => now(),
-            'gross_source' => $request->string('source')->toString(),
+            'gross_source' => $source->kind,
+            'gross_reading_id' => $source->reading?->id,
+            'gross_manual_reason' => $source->manualReason,
             'gross_photo_path' => $photo,
             'gross_by_user_id' => $request->user()->id,
             'net_weight_kg' => $result->netKg,
@@ -179,6 +250,8 @@ class WeighbridgeController extends Controller
             'variance_kg' => $result->varianceKg,
             'is_overload' => $result->isOverload,
         ])->save();
+
+        $source->reading?->forceFill(['appointment_id' => $appointment->id])->save();
 
         $this->audit->log(
             action: 'RECORD_GROSS_WEIGHT',
@@ -188,6 +261,9 @@ class WeighbridgeController extends Controller
                 'net_weight_kg' => $result->netKg,
                 'variance_kg' => $result->varianceKg,
                 'is_overload' => $result->isOverload,
+                'source' => $source->kind,
+                'reading_id' => $source->reading?->id,
+                'manual_reason' => $source->manualReason,
             ],
             request: $request,
         );
@@ -214,6 +290,58 @@ class WeighbridgeController extends Controller
         return back()->with('success', "وزن پر ثبت و برگه خروج {$number} صادر شد.");
     }
 
+    /**
+     * تازه‌ترین عددِ هر باسکول.
+     *
+     * WebSocket راه اصلی است، ولی اتاقک باسکول جایی است که شبکه ضعیف است
+     * و صفحه ساعت‌ها باز می‌ماند. این مسیر همان پشتیبانِ polling است که
+     * وقتی اتصال زنده بیفتد، باسکول را بی‌مصرف نمی‌گذارد.
+     */
+    public function readings(Request $request): JsonResponse
+    {
+        $this->authorizeWeighing($request);
+
+        return response()->json(['scales' => $this->liveScales($request)]);
+    }
+
+    /**
+     * آخرین خواندنِ هر باسکول، جدا از هم.
+     *
+     * باسکولِ ورودی و خروجی دو دستگاه جدا هستند و عددشان نباید قاطی شود؛
+     * اپراتور باید بداند این عدد از کدام پل آمده.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function liveScales(Request $request): array
+    {
+        if (! $this->scales->enabled()) {
+            return [];
+        }
+
+        $factoryId = $this->factory($request)->id;
+
+        return ScaleReading::where('factory_id', $factoryId)
+            ->fresh()
+            ->whereIn('id', function ($query) use ($factoryId) {
+                $query->selectRaw('max(id)')
+                    ->from('scale_readings')
+                    ->where('factory_id', $factoryId)
+                    ->where('read_at', '>=', now()->subSeconds(ScaleReading::FRESH_SECONDS))
+                    ->groupBy('scale_name');
+            })
+            ->orderBy('scale_name')
+            ->get()
+            ->map(fn (ScaleReading $reading) => [
+                'id' => $reading->id,
+                'scale' => $reading->scale_name,
+                'weight_kg' => (float) $reading->weight_kg,
+                'is_stable' => $reading->is_stable,
+                'read_at' => $reading->read_at?->toIso8601String(),
+                'clock' => $reading->read_at?->format('H:i:s'),
+            ])
+            ->all();
+    }
+
     private function render(Request $request, ?Appointment $appointment, ?string $error = null): Response
     {
         $appointment?->load(['driver', 'truck.truckType', 'product', 'loadingRecord', 'factory']);
@@ -221,6 +349,10 @@ class WeighbridgeController extends Controller
         $record = $appointment?->loadingRecord;
 
         return Inertia::render('Staff/Weighbridge/Index', [
+            'factoryId' => $this->factory($request)->id,
+            'scaleEnabled' => $this->scales->enabled(),
+            'requireStable' => $this->scales->requireStable(),
+            'scales' => $this->liveScales($request),
             'pending' => $this->pendingCounts($request),
             'result' => [
                 'error' => $error,

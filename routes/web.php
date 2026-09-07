@@ -7,7 +7,7 @@ use App\Http\Controllers\Staff\Catalog\ProductController;
 use App\Http\Controllers\Staff\Catalog\TruckTypeController;
 use App\Http\Controllers\Staff\DashboardController;
 use App\Http\Controllers\Staff\GateController;
-use App\Http\Controllers\Staff\GateDeviceController;
+use App\Http\Controllers\Staff\DeviceSettingsController;
 use App\Http\Controllers\Staff\HomeController;
 use App\Http\Controllers\Staff\LoadingController;
 use App\Http\Controllers\Staff\LoginController;
@@ -102,6 +102,8 @@ Route::prefix('panel')->name('staff.')->group(function () {
         Route::post('/weighbridge/scan', [WeighbridgeController::class, 'scan'])->name('weighbridge.scan');
         Route::post('/weighbridge/{appointment}/record', [WeighbridgeController::class, 'record'])
             ->name('weighbridge.record');
+        Route::get('/weighbridge/readings', [WeighbridgeController::class, 'readings'])
+            ->name('weighbridge.readings');
 
         Route::get('/queue', [QueueController::class, 'index'])->name('queue.index');
         Route::get('/queue/{appointment}', [QueueController::class, 'show'])->name('queue.show');
@@ -127,9 +129,9 @@ Route::prefix('panel')->name('staff.')->group(function () {
         Route::get('/settings', [SettingsController::class, 'edit'])->name('settings.edit');
         Route::put('/settings', [SettingsController::class, 'update'])->name('settings.update');
 
-        Route::get('/settings/devices', [GateDeviceController::class, 'edit'])->name('settings.devices');
-        Route::put('/settings/devices', [GateDeviceController::class, 'update'])->name('settings.devices.update');
-        Route::post('/settings/devices/token', [GateDeviceController::class, 'rotateToken'])
+        Route::get('/settings/devices', [DeviceSettingsController::class, 'edit'])->name('settings.devices');
+        Route::put('/settings/devices', [DeviceSettingsController::class, 'update'])->name('settings.devices.update');
+        Route::post('/settings/devices/token', [DeviceSettingsController::class, 'rotateToken'])
             ->name('settings.devices.token');
 
         Route::get('/settings/sms', [SmsSettingsController::class, 'edit'])->name('settings.sms');

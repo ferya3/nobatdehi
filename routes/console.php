@@ -16,3 +16,6 @@ Schedule::command('loading:alert-delays')->everyTenMinutes()->withoutOverlapping
 
 // عکس‌های دوربین پلاک‌خوان جمع می‌شوند تا دیسک پر شود — مگر کسی پاکشان کند
 Schedule::command('plate-readings:prune')->dailyAt('03:30')->withoutOverlapping();
+
+// پل باسکول هر تغییر وزن را می‌فرستد؛ بیشترشان لحظه‌ی بالا رفتن روی سکو هستند
+Schedule::command('scale-readings:prune')->dailyAt('03:40')->withoutOverlapping();
