@@ -4,8 +4,16 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Booking;
 
+use App\Domain\Appointment\Actions\TransitionAppointment;
+use App\Domain\Appointment\Data\Actor;
+use App\Domain\Appointment\Enums\AppointmentStatus as S;
 use App\Domain\Slot\AppointmentScheduler;
+use App\Domain\Slot\Opening;
+use App\Domain\Slot\SlotGenerator;
+use App\Models\Appointment;
 use App\Models\Factory;
+use App\Models\Product;
+use App\Models\WorkingHour;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\Test;
@@ -93,8 +101,8 @@ final class SchedulerTest extends TestCase
         $factory = $this->openEveryDay(['booking_lead_minutes' => 30]);
 
         // امروز را تعطیل می‌کنیم
-        \App\Models\WorkingHour::where('factory_id', $factory->id)
-            ->where('weekday', \App\Domain\Slot\SlotGenerator::weekdayFor(CarbonImmutable::today()))
+        WorkingHour::where('factory_id', $factory->id)
+            ->where('weekday', SlotGenerator::weekdayFor(CarbonImmutable::today()))
             ->update(['is_open' => false]);
 
         $opening = $this->scheduler->nextOpening($factory->fresh(), 30);
@@ -132,12 +140,94 @@ final class SchedulerTest extends TestCase
         $this->assertNull($this->scheduler->nextOpening($factory, 60 * 24));
     }
 
+    /**
+     * لغو، ظرفیت روز را نمی‌سوزاند.
+     *
+     * این همان چیزی است که روی سرور دیده شد: بعد از چند لغوِ آزمایشی، اولین
+     * نوبتِ فردا به‌جای ۰۷:۰۰ ساعت‌ها دیرتر اعلام می‌شد — دقیقاً به اندازه‌ی
+     * جمعِ بارگیریِ نوبت‌هایی که هیچ‌وقت نیامدند.
+     */
+    #[Test]
+    public function a_cancelled_appointment_gives_its_slot_back(): void
+    {
+        $this->travelTo(CarbonImmutable::today()->setTime(1, 0));
+
+        $factory = $this->openEveryDay(['booking_lead_minutes' => 30, 'loading_lines' => 1]);
+
+        $first = $this->scheduler->nextOpening($factory, 80);
+        $this->assertNotNull($first);
+        $this->assertSame('07:00', $first->startsAt->format('H:i'));
+
+        $appointment = $this->bookInto($first);
+
+        // تا وقتی زنده است، نوبت بعدی پشت سرش می‌نشیند
+        $this->assertSame(
+            '08:20',
+            $this->scheduler->nextOpening($factory, 80)?->startsAt->format('H:i'),
+        );
+
+        app(TransitionAppointment::class)(
+            $appointment,
+            S::Cancelled,
+            Actor::driver($appointment->driver),
+            'راننده منصرف شد',
+        );
+
+        // و با لغو، همان ۰۷:۰۰ دوباره آزاد می‌شود
+        $this->assertSame(
+            '07:00',
+            $this->scheduler->nextOpening($factory, 80)?->startsAt->format('H:i'),
+        );
+    }
+
+    #[Test]
+    public function a_completed_appointment_keeps_its_slot(): void
+    {
+        $this->travelTo(CarbonImmutable::today()->setTime(1, 0));
+
+        $factory = $this->openEveryDay(['booking_lead_minutes' => 30, 'loading_lines' => 1]);
+
+        $opening = $this->scheduler->nextOpening($factory, 80);
+        $appointment = $this->bookInto($opening);
+
+        // آن کامیون واقعاً لاین را گرفت؛ آزاد کردنش یعنی دو بارگیری هم‌زمان
+        $appointment->forceFill(['status' => S::Completed])->save();
+
+        $this->assertSame(
+            '08:20',
+            $this->scheduler->nextOpening($factory, 80)?->startsAt->format('H:i'),
+        );
+    }
+
+    /** نوبتی که دقیقاً روی یک Opening نشسته — بدون عبور از CreateAppointment */
+    private function bookInto(Opening $opening): Appointment
+    {
+        $driver = $this->makeDriver('0912'.str_pad((string) random_int(1, 9999999), 7, '0'));
+
+        return Appointment::create([
+            'factory_id' => $this->factory->id,
+            'number' => 1 + (int) Appointment::where('factory_id', $this->factory->id)
+                ->whereDate('date', $opening->date->toDateString())->max('number'),
+            'driver_id' => $driver->id,
+            'truck_id' => $this->makeTruck(
+                str_pad((string) random_int(10, 99), 2, '0'), 'ب',
+                str_pad((string) random_int(100, 999), 3, '0'), '67',
+            )->id,
+            'product_id' => Product::where('factory_id', $this->factory->id)->firstOrFail()->id,
+            'date' => $opening->date->toDateString(),
+            'start_time' => $opening->startTime(),
+            'end_time' => $opening->endTime(),
+            'line_no' => $opening->line,
+            'status' => S::Booked,
+        ]);
+    }
+
     /** کارخانه‌ای که همه‌ی هفته ۰۷:۰۰ تا ۱۸:۰۰ باز است */
     private function openEveryDay(array $overrides = []): Factory
     {
         $this->factory->update($overrides);
 
-        \App\Models\WorkingHour::where('factory_id', $this->factory->id)->update([
+        WorkingHour::where('factory_id', $this->factory->id)->update([
             'is_open' => true,
             'opens_at' => '07:00:00',
             'closes_at' => '18:00:00',

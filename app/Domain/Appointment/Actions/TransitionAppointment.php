@@ -5,10 +5,11 @@ declare(strict_types=1);
 namespace App\Domain\Appointment\Actions;
 
 use App\Domain\Appointment\AppointmentStateMachine;
-use App\Domain\Appointment\TransitionPreconditions;
 use App\Domain\Appointment\Data\Actor;
 use App\Domain\Appointment\Enums\AppointmentStatus;
 use App\Domain\Appointment\Exceptions\InvalidStateTransition;
+use App\Domain\Appointment\Exceptions\TransitionBlocked;
+use App\Domain\Appointment\TransitionPreconditions;
 use App\Events\AppointmentTransitioned;
 use App\Models\Appointment;
 use Illuminate\Support\Facades\DB;
@@ -16,10 +17,10 @@ use Illuminate\Support\Facades\DB;
 /**
  * تنها راه تغییر وضعیت یک نوبت.
  *
- * جای نوبت در برنامه به وضعیتش وابسته نیست: لغو، جای خالی نمی‌سازد و
- * بازگردانی هم چیزی را دوباره اشغال نمی‌کند. ساعتی که به راننده اعلام شده
- * تا آخر مالِ اوست، حتی وقتی نوبت بسته شده باشد — وگرنه بازگرداندنِ یک لغوِ
- * اشتباه می‌توانست شکست بخورد، آن هم دقیقاً وقتی که بیشترین نیاز به آن هست.
+ * ساعتِ اعلام‌شده هرگز جابه‌جا نمی‌شود؛ ولی لغو، بازه را روی لاین آزاد
+ * می‌کند و نوبتِ بعدی می‌تواند همان‌جا بنشیند. پس بازگرداندنِ یک لغو، دیگر
+ * بی‌قید و شرط نیست: اگر جای خالی را کسی گرفته باشد، بازگردانی با پیامی
+ * روشن رد می‌شود و نه با خطای دیتابیس.
  */
 final class TransitionAppointment
 {
@@ -57,8 +58,9 @@ final class TransitionAppointment
                 $this->preconditions->assert($fresh, $to);
             }
 
-            // جای نوبت در صف با لغو آزاد نمی‌شود و با بازگردانی هم دوباره
-            // گرفته نمی‌شود: ساعتِ اعلام‌شده به راننده ثابت می‌ماند.
+            // برگرداندنِ نوبتی که لغو شده، یعنی پس‌گرفتنِ بازه‌ای که آزاد شده
+            $this->assertLineStillFree($fresh, $from, $to);
+
             $fresh->status = $to;
             $fresh->loading_point_id = $loadingPointId ?? $fresh->loading_point_id;
             $this->stamp($fresh, $to);
@@ -116,6 +118,37 @@ final class TransitionAppointment
     }
 
     /** زمان هر وضعیت را ثبت می‌کند — پایه‌ی تمام گزارش‌های زمانی. */
+    /**
+     * بازگرداندنِ یک نوبتِ بسته، فقط وقتی که جایش هنوز خالی باشد.
+     *
+     * لغو، بازه را روی لاین آزاد می‌کند و ممکن است راننده‌ی دیگری همان
+     * ساعت را گرفته باشد. بدون این بررسی، بازگردانی به ایندکس یکتای
+     * دیتابیس می‌خورد و اپراتور به‌جای دلیل، یک خطای ۵۰۰ می‌دید.
+     */
+    private function assertLineStillFree(
+        Appointment $appointment,
+        AppointmentStatus $from,
+        AppointmentStatus $to,
+    ): void {
+        if ($from->holdsLine() || ! $to->holdsLine()) {
+            return;
+        }
+
+        $taken = Appointment::where('factory_id', $appointment->factory_id)
+            ->whereKeyNot($appointment->id)
+            ->whereDate('date', $appointment->date->toDateString())
+            ->where('line_no', $appointment->line_no)
+            ->where('start_time', $appointment->start_time)
+            ->whereNotIn('status', AppointmentStatus::releasedValues())
+            ->exists();
+
+        if ($taken) {
+            throw TransitionBlocked::because(
+                'این ساعت بعد از لغو به نوبت دیگری داده شده است. برای برگرداندن این راننده، نوبت تازه ثبت کنید.',
+            );
+        }
+    }
+
     private function stamp(Appointment $appointment, AppointmentStatus $to): void
     {
         $column = match ($to) {

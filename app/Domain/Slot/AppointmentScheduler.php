@@ -22,9 +22,14 @@ use Carbon\CarbonImmutable;
  * لاین‌های موازی: کارخانه‌ای که سه لاین بارگیری دارد سه کامیون را هم‌زمان
  * می‌برد. هر نوبت روی لاینی می‌نشیند که زودتر از همه آزاد می‌شود.
  *
- * زمانِ اعلام‌شده بعداً جابه‌جا نمی‌شود. اگر نوبتی لغو شود، جای خالی‌اش
- * همان‌جا می‌ماند و نوبت‌های بعدی جلو نمی‌افتند — راننده‌ای که پیامک «ساعت
- * ۱۰:۲۰» گرفته نباید ساعت ۹ کامیونش را از دست بدهد.
+ * زمانِ اعلام‌شده بعداً جابه‌جا نمی‌شود: نوبت‌هایی که همین حالا در صف‌اند
+ * سر جای خودشان می‌مانند و هرگز جلو کشیده نمی‌شوند — راننده‌ای که پیامک
+ * «ساعت ۱۰:۲۰» گرفته نباید ساعت ۹ کامیونش را از دست بدهد.
+ *
+ * ولی بازه‌ی نوبتی که لغو شده به نوبتِ *تازه* داده می‌شود. کامیونی نیامده و
+ * لاین آن ساعت خالی است؛ اگر آزاد نشود، هر لغو یک تکه از ظرفیت آن روز را
+ * برای همیشه می‌سوزاند و بعد از چند لغو، اولین نوبتِ صبح ساعت‌ها دیرتر
+ * اعلام می‌شود.
  */
 final class AppointmentScheduler
 {
@@ -91,7 +96,7 @@ final class AppointmentScheduler
             return null;
         }
 
-        [$startsAt, $line] = $this->firstFreeLine($factory, $date, $opensAt, $earliest);
+        [$startsAt, $line] = $this->firstFreeLine($factory, $date, $opensAt, $earliest, $loadingMinutes);
 
         $endsAt = $startsAt->addMinutes($loadingMinutes);
 
@@ -104,13 +109,19 @@ final class AppointmentScheduler
     }
 
     /**
-     * زودترین لاینِ آزاد و لحظه‌ای که آزاد می‌شود.
+     * زودترین جایی که این کامیون روی یکی از لاین‌ها جا می‌شود.
      *
      * لاین‌ها از روی نوبت‌های همان روز بازسازی می‌شوند و نه از یک شمارنده:
      * شمارنده بعد از اولین لغو یا ویرایش، با واقعیت فاصله می‌گیرد و کسی
      * متوجه نمی‌شود تا روزی که دو کامیون هم‌زمان روی یک لاین بیفتند.
      *
-     * نوبت‌های لغوشده هم حساب می‌شوند: جای خالی‌شان پر نمی‌شود.
+     * فاصله‌های خالیِ وسط روز هم گزینه‌اند، نه فقط انتهای صف. نوبتی که لغو
+     * می‌شود یک حفره‌ی واقعی در برنامه باقی می‌گذارد؛ اگر فقط «آخرین لحظه‌ی
+     * آزاد بودنِ لاین» را نگاه کنیم، آن حفره تا آخر روز خالی می‌ماند و
+     * کامیون‌ها بی‌دلیل عقب می‌افتند.
+     *
+     * لغوشده و عدم‌حضور اصلاً جایی اشغال نمی‌کنند: آن کامیون نیامده. ولی
+     * تکمیل‌شده اشغال می‌کند، چون واقعاً لاین را گرفته بود.
      *
      * @return array{0: CarbonImmutable, 1: int}
      */
@@ -119,36 +130,16 @@ final class AppointmentScheduler
         CarbonImmutable $date,
         CarbonImmutable $opensAt,
         CarbonImmutable $earliest,
+        int $loadingMinutes,
     ): array {
         $lines = max(1, (int) $factory->loading_lines);
-
-        $busyUntil = array_fill(1, $lines, $opensAt);
-
-        $rows = Appointment::where('factory_id', $factory->id)
-            ->whereDate('date', $date->toDateString())
-            ->orderBy('start_time')
-            ->get(['line_no', 'end_time']);
-
-        foreach ($rows as $row) {
-            $line = (int) $row->line_no;
-
-            // نوبت‌های قدیمیِ پیش از لاین‌بندی، یا لاینی که دیگر وجود ندارد
-            if ($line < 1 || $line > $lines) {
-                $line = 1;
-            }
-
-            $endsAt = $this->at($date, (string) $row->end_time);
-
-            if ($endsAt->greaterThan($busyUntil[$line])) {
-                $busyUntil[$line] = $endsAt;
-            }
-        }
+        $floor = $opensAt->max($earliest);
 
         $bestLine = 1;
         $bestStart = null;
 
-        foreach ($busyUntil as $line => $freeAt) {
-            $start = $freeAt->max($earliest);
+        foreach ($this->busyByLine($factory, $date, $lines) as $line => $intervals) {
+            $start = $this->firstGap($intervals, $floor, $loadingMinutes);
 
             // مساوی که باشند، لاین کوچک‌تر برنده است تا ترتیب قابل پیش‌بینی بماند
             if ($bestStart === null || $start->lessThan($bestStart)) {
@@ -158,6 +149,63 @@ final class AppointmentScheduler
         }
 
         return [$bestStart, $bestLine];
+    }
+
+    /**
+     * بازه‌های اشغالِ هر لاین، مرتب‌شده بر اساس شروع.
+     *
+     * @return array<int, array<int, array{0: CarbonImmutable, 1: CarbonImmutable}>>
+     */
+    private function busyByLine(Factory $factory, CarbonImmutable $date, int $lines): array
+    {
+        $busy = array_fill(1, $lines, []);
+
+        $rows = Appointment::where('factory_id', $factory->id)
+            ->whereDate('date', $date->toDateString())
+            ->whereNotIn('status', AppointmentStatus::releasedValues())
+            ->orderBy('start_time')
+            ->get(['line_no', 'start_time', 'end_time']);
+
+        foreach ($rows as $row) {
+            $line = (int) $row->line_no;
+
+            // نوبت‌های قدیمیِ پیش از لاین‌بندی، یا لاینی که دیگر وجود ندارد
+            if ($line < 1 || $line > $lines) {
+                $line = 1;
+            }
+
+            $busy[$line][] = [
+                $this->at($date, (string) $row->start_time),
+                $this->at($date, (string) $row->end_time),
+            ];
+        }
+
+        return $busy;
+    }
+
+    /**
+     * اولین لحظه‌ای که از $floor به بعد، $minutes دقیقه پشت سر هم آزاد است.
+     *
+     * @param  array<int, array{0: CarbonImmutable, 1: CarbonImmutable}>  $intervals
+     */
+    private function firstGap(array $intervals, CarbonImmutable $floor, int $minutes): CarbonImmutable
+    {
+        $cursor = $floor;
+
+        foreach ($intervals as [$start, $end]) {
+            if ($end->lessThanOrEqualTo($cursor)) {
+                continue;   // کاملاً پشت سر ماند
+            }
+
+            // تا شروعِ این نوبت، به اندازه‌ی کافی جا هست؟
+            if ($start->greaterThanOrEqualTo($cursor->addMinutes($minutes))) {
+                return $cursor;
+            }
+
+            $cursor = $end;
+        }
+
+        return $cursor;
     }
 
     /** سقف روزانه‌ی کارخانه — جدا از ساعات کاری */

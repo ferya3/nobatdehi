@@ -27,6 +27,9 @@ final class LineBackfillMigrationTest extends TestCase
 
     private const MIGRATION = 'database/migrations/2026_09_07_060000_schedule_appointments_in_sequence.php';
 
+    /** مهاجرتی که بعدها قید یکتا را به ایندکس جزئی تبدیل کرد */
+    private const PARTIAL_INDEX_MIGRATION = 'database/migrations/2026_09_08_090000_release_cancelled_line_slots.php';
+
     #[Test]
     public function the_migration_survives_appointments_that_share_one_slot(): void
     {
@@ -49,8 +52,7 @@ final class LineBackfillMigrationTest extends TestCase
         $this->assertSame(1, Appointment::distinct()->count('start_time'));
         $this->assertSame([1], Appointment::distinct()->pluck('line_no')->all());
 
-        $this->artisan('migrate', ['--path' => self::MIGRATION, '--force' => true])
-            ->assertSuccessful();
+        $this->replayMigrations();
 
         // هر نوبت لاین خودش را گرفته و ساعت هیچ‌کس عوض نشده
         $rows = Appointment::orderBy('number')->get(['number', 'line_no', 'start_time']);
@@ -70,10 +72,18 @@ final class LineBackfillMigrationTest extends TestCase
 
         $this->assertSame(0, Appointment::count());
 
-        $this->artisan('migrate', ['--path' => self::MIGRATION, '--force' => true])
-            ->assertSuccessful();
+        $this->replayMigrations();
 
         $this->assertTrue($this->uniqueIndexExists());
+    }
+
+    /** هر دو مهاجرت، به همان ترتیبی که روی سرور اجرا می‌شوند */
+    private function replayMigrations(): void
+    {
+        foreach ([self::MIGRATION, self::PARTIAL_INDEX_MIGRATION] as $path) {
+            $this->artisan('migrate', ['--path' => $path, '--force' => true])
+                ->assertSuccessful();
+        }
     }
 
     /**
@@ -85,19 +95,25 @@ final class LineBackfillMigrationTest extends TestCase
     private function rewindToBeforeTheMigration(): void
     {
         DB::statement('ALTER TABLE appointments DROP CONSTRAINT IF EXISTS appointments_line_slot_unique');
+        DB::statement('DROP INDEX IF EXISTS appointments_line_slot_unique');
+        DB::statement('DROP INDEX IF EXISTS appointments_live_line_slot_unique');
         DB::statement('DROP INDEX IF EXISTS appointments_factory_id_date_line_no_index');
         DB::table('appointments')->update(['line_no' => 1, 'start_time' => '11:30:00', 'end_time' => '12:00:00']);
 
         DB::table('migrations')
-            ->where('migration', '2026_09_07_060000_schedule_appointments_in_sequence')
+            ->whereIn('migration', [
+                '2026_09_07_060000_schedule_appointments_in_sequence',
+                '2026_09_08_090000_release_cancelled_line_slots',
+            ])
             ->delete();
     }
 
+    /** ایندکسی که در پایانِ زنجیره‌ی مهاجرت‌ها باید سرِ جایش باشد */
     private function uniqueIndexExists(): bool
     {
         return DB::selectOne(
             "SELECT 1 AS ok FROM pg_indexes WHERE tablename = 'appointments' AND indexname = ?",
-            ['appointments_line_slot_unique'],
+            ['appointments_live_line_slot_unique'],
         ) !== null;
     }
 }

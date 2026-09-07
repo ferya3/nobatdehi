@@ -78,6 +78,32 @@ enum AppointmentStatus: string
         return in_array($this, [self::Cancelled, self::Rejected, self::NoShow, self::Expired], true);
     }
 
+    /**
+     * آیا این نوبت هنوز جای خودش را روی لاین بارگیری نگه داشته؟
+     *
+     * تکمیل‌شده نگه می‌دارد — آن کامیون واقعاً آن بازه را گرفت و نوبت بعدی
+     * نمی‌توانست هم‌زمان با او بارگیری شود. ولی لغوشده و عدم‌حضور نه: کامیونی
+     * نیامده، لاین خالی مانده، و اگر آن بازه آزاد نشود ظرفیتِ آن روز برای
+     * همیشه سوخته است.
+     */
+    public function holdsLine(): bool
+    {
+        return ! $this->isCancellation();
+    }
+
+    /**
+     * وضعیت‌هایی که بازه‌شان روی لاین آزاد شده است.
+     *
+     * @return array<int, string>
+     */
+    public static function releasedValues(): array
+    {
+        return array_values(array_map(
+            fn (self $s) => $s->value,
+            array_filter(self::cases(), fn (self $s) => ! $s->holdsLine()),
+        ));
+    }
+
     /** آیا کامیون فیزیکاً داخل کارخانه است؟ */
     public function isOnSite(): bool
     {
