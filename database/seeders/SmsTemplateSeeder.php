@@ -28,9 +28,14 @@ class SmsTemplateSeeder extends Seeder
                 'body' => "نوبت شما فرا رسید.\nشماره نوبت: {number}\nلطفاً به {loading_point} مراجعه کنید.",
             ],
             [
+                'key' => 'appointment.next-up',
+                'title' => 'نوبت شما نزدیک است — نفر بعدی',
+                'body' => "راننده محترم {driver}\nنوبت جلوتر از شما شروع به بارگیری کرد.\nتا حدود {eta} دیگر نوبت شماست (حدود ساعت {at}).\nشماره نوبت شما: {number}\n{factory}",
+            ],
+            [
                 'key' => 'appointment.cancelled',
                 'title' => 'لغو نوبت — اطلاع به راننده',
-                'body' => "نوبت شماره {number} در تاریخ {date} ساعت {time} لغو شد.",
+                'body' => 'نوبت شماره {number} در تاریخ {date} ساعت {time} لغو شد.',
             ],
             [
                 'key' => 'appointment.cancelled.manager',

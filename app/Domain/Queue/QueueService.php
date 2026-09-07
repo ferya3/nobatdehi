@@ -208,6 +208,42 @@ final class QueueService
             ->all();
     }
 
+    /**
+     * نفر بعدیِ صف — کسی که وقتی کامیونِ جلویی روی لاین می‌رود، نوبتش نزدیک شده.
+     *
+     * «بعدی» یعنی اولین نوبتِ همان روز که هنوز به لاین نرسیده: ثبت‌شده،
+     * در انتظار، فراخوانده‌شده یا واردِ محوطه. کسی که خودش در حال بارگیری
+     * است بعدی نیست، و نوبت‌های لغوشده اصلاً در صف نیستند.
+     *
+     * ترتیب همان ترتیبی است که پنل اپراتور نشان می‌دهد — ساعت، بعد اولویت،
+     * بعد شماره — تا خبری که به راننده می‌رسد با آنچه روی صفحه است یکی باشد.
+     */
+    public function nextInLine(Appointment $current): ?Appointment
+    {
+        $waiting = [
+            AppointmentStatus::Booked->value,
+            AppointmentStatus::Waiting->value,
+            AppointmentStatus::Called->value,
+            AppointmentStatus::CheckedIn->value,
+        ];
+
+        return Appointment::with(['driver', 'truck.truckType', 'factory'])
+            ->where('factory_id', $current->factory_id)
+            ->whereDate('date', $current->date->toDateString())
+            ->whereKeyNot($current->id)
+            ->whereIn('status', $waiting)
+            ->where(function (Builder $query) use ($current) {
+                // پشتِ سرِ کامیونِ فعلی، به همان ترتیبی که صف چیده شده
+                $query->where('start_time', '>', $current->start_time)
+                    ->orWhere(function (Builder $tie) use ($current) {
+                        $tie->where('start_time', $current->start_time)
+                            ->where('number', '>', $current->number);
+                    });
+            })
+            ->queueOrder()
+            ->first();
+    }
+
     /** شمارنده‌های امروز برای داشبورد و پنل اپراتور */
     public function todayCounters(Factory $factory, ?CarbonImmutable $date = null): array
     {

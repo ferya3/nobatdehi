@@ -46,6 +46,7 @@ class Appointment extends Model
             'qr_used_at' => 'datetime',
             'waiting_at' => 'datetime',
             'called_at' => 'datetime',
+            'next_up_notified_at' => 'datetime',
             'checked_in_at' => 'datetime',
             'loading_started_at' => 'datetime',
             'loading_completed_at' => 'datetime',
