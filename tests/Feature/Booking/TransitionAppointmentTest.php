@@ -39,7 +39,6 @@ final class TransitionAppointmentTest extends TestCase
             $factory,
             $this->makeDriver('09123456789'),
             $this->makeTruck('12', 'ب', '345', '67'),
-            $this->futureSlot($factory),
         ));
     }
 
@@ -88,24 +87,26 @@ final class TransitionAppointmentTest extends TestCase
     }
 
     #[Test]
-    public function leaving_the_active_set_frees_slot_capacity(): void
+    public function leaving_the_active_set_records_who_closed_it(): void
     {
         $appointment = $this->bookOne();
-        $slot = $appointment->slot;
-
-        $this->assertSame(1, $slot->fresh()->reserved_count);
+        $place = [$appointment->date->toDateString(), (int) $appointment->line_no, $appointment->start_time];
 
         ($this->transition)($appointment, S::Cancelled, Actor::user($this->operator()), 'انصراف راننده');
 
-        $this->assertSame(0, $slot->fresh()->reserved_count);
-        $this->assertSame('انصراف راننده', $appointment->fresh()->cancel_reason);
+        $closed = $appointment->fresh();
+
+        $this->assertSame('انصراف راننده', $closed->cancel_reason);
+        $this->assertSame(S::Cancelled, $closed->status);
+
+        // جای نوبت با لغو آزاد نمی‌شود — همان‌جا می‌ماند
+        $this->assertSame($place, [$closed->date->toDateString(), (int) $closed->line_no, $closed->start_time]);
     }
 
     #[Test]
-    public function reserved_count_always_equals_the_number_of_active_appointments(): void
+    public function a_cancelled_appointment_keeps_its_place_in_the_schedule(): void
     {
         $factory = $this->seedFactory();
-        $slot = $this->futureSlot($factory);
         $create = app(CreateAppointment::class);
         $actor = Actor::user($this->operator());
 
@@ -116,21 +117,30 @@ final class TransitionAppointmentTest extends TestCase
                 $factory,
                 $this->makeDriver('0912100000'.$i),
                 $this->makeTruck(str_pad((string) (20 + $i), 2, '0', STR_PAD_LEFT), 'ب', '345', '67'),
-                $slot,
             ));
         }
 
-        ($this->transition)($appointments[0], S::Cancelled, $actor);
+        $cancelled = $appointments[0];
+        $place = [$cancelled->date->toDateString(), $cancelled->line_no, $cancelled->start_time];
+
+        ($this->transition)($cancelled, S::Cancelled, $actor);
         ($this->transition)($appointments[1], S::Waiting, $actor);
         ($this->transition)($appointments[2], S::Waiting, $actor);
         ($this->transition)($appointments[2], S::NoShow, $actor);
 
-        $active = Appointment::where('slot_id', $slot->id)
-            ->whereIn('status', S::activeValues())
-            ->count();
+        // جای خالیِ نوبتِ لغوشده به کسی داده نمی‌شود: راننده‌ای که ساعتش را
+        // پیامک گرفته، نباید ببیند نوبتش جلو افتاده.
+        $newcomer = $create($this->booking(
+            $factory, $this->makeDriver('09121000099'), $this->makeTruck('99', 'د', '999', '67')));
 
-        $this->assertSame($active, $slot->fresh()->reserved_count);
-        $this->assertSame(2, $active);
+        $this->assertNotSame(
+            $place,
+            [$newcomer->date->toDateString(), $newcomer->line_no, $newcomer->start_time],
+        );
+
+        $this->assertSame(2, Appointment::whereIn('status', S::activeValues())
+            ->whereKeyNot($newcomer->id)
+            ->count());
     }
 
     #[Test]
@@ -182,17 +192,15 @@ final class TransitionAppointmentTest extends TestCase
     }
 
     #[Test]
-    public function reviving_a_cancelled_appointment_fails_when_the_slot_filled_up(): void
+    public function a_cancelled_appointment_can_be_revived_because_its_place_was_kept(): void
     {
         $factory = $this->seedFactory();
-        $slot = $this->futureSlot($factory);
-        $slot->update(['capacity' => 1]);
-
         $create = app(CreateAppointment::class);
 
         $first = $create($this->booking(
-            $factory, $this->makeDriver('09121110001'), $this->makeTruck('31', 'ب', '311', '67'), $slot
-        ));
+            $factory, $this->makeDriver('09121110001'), $this->makeTruck('31', 'ب', '311', '67')));
+
+        $place = [$first->date->toDateString(), (int) $first->line_no, $first->start_time];
 
         $manager = $this->operator();
         $manager->givePermissionTo(Permissions::APPOINTMENTS_ROLLBACK);
@@ -200,13 +208,15 @@ final class TransitionAppointmentTest extends TestCase
 
         ($this->transition)($first, S::Cancelled, Actor::user($manager));
 
-        // جای خالی را نفر بعدی برمی‌دارد
+        // نفر بعدی جای او را نمی‌گیرد
         $create($this->booking(
-            $factory, $this->makeDriver('09121110002'), $this->makeTruck('32', 'ج', '312', '67'), $slot
-        ));
-
-        $this->expectException(BookingException::class);
+            $factory, $this->makeDriver('09121110002'), $this->makeTruck('32', 'ج', '312', '67')));
 
         ($this->transition)($first->fresh(), S::Booked, Actor::user($manager));
+
+        $revived = $first->fresh();
+
+        $this->assertSame(S::Booked, $revived->status);
+        $this->assertSame($place, [$revived->date->toDateString(), (int) $revived->line_no, $revived->start_time]);
     }
 }

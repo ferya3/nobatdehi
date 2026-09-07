@@ -29,8 +29,13 @@ class SmsTemplateSeeder extends Seeder
             ],
             [
                 'key' => 'appointment.cancelled',
-                'title' => 'لغو نوبت',
+                'title' => 'لغو نوبت — اطلاع به راننده',
                 'body' => "نوبت شماره {number} در تاریخ {date} ساعت {time} لغو شد.",
+            ],
+            [
+                'key' => 'appointment.cancelled.manager',
+                'title' => 'لغو نوبت — اطلاع به مدیر',
+                'body' => "لغو نوبت بارگیری\nشماره نوبت: {number}\nپلاک: {plate}\nراننده: {driver}\nنوع بار: {product}\nتاریخ: {date}\nساعت: {time}\n{by}\nدلیل: {reason}",
             ],
             [
                 'key' => 'otp.login',

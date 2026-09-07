@@ -60,7 +60,6 @@ final class CancelAttributionTest extends TestCase
                 $this->factory,
                 $this->driver,
                 $this->makeTruck('12', 'ب', '345', '11'),
-                $this->futureSlot($this->factory),
             ),
         );
     }

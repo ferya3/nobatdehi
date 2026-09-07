@@ -28,10 +28,14 @@ class StoreAppointmentRequest extends FormRequest
         ]);
     }
 
+    /**
+     * ساعت نوبت عمداً اینجا نیست.
+     *
+     * راننده انتخابش نمی‌کند و کسی هم نمی‌تواند در درخواست تحمیلش کند —
+     * زمان‌بند سمت سرور تعیینش می‌کند.
+     */
     public function rules(): array
     {
-        $factoryId = $this->route('factory')?->id ?? $this->input('factory_id');
-
         return [
             'driver_name' => ['required', 'string', 'min:3', 'max:120'],
             'national_code' => ['required', 'string', new NationalCode()],
@@ -41,7 +45,6 @@ class StoreAppointmentRequest extends FormRequest
             'plate_iran' => ['required', 'digits:2'],
             'truck_type_id' => ['required', Rule::exists('truck_types', 'id')->where('is_active', true)],
             'product_id' => ['required', Rule::exists('products', 'id')->where('is_active', true)],
-            'slot_id' => ['required', Rule::exists('appointment_slots', 'id')],
             'idempotency_key' => ['required', 'string', 'max:64'],
         ];
     }
@@ -77,7 +80,6 @@ class StoreAppointmentRequest extends FormRequest
             'plate_iran.digits' => 'کد ایران باید دو رقم باشد.',
             'truck_type_id.required' => 'نوع خودرو را انتخاب کنید.',
             'product_id.required' => 'نوع بار را انتخاب کنید.',
-            'slot_id.required' => 'ساعت مراجعه را انتخاب کنید.',
         ];
     }
 

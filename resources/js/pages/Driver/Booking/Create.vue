@@ -7,9 +7,9 @@ import SelectCard from '@/components/SelectCard.vue';
 import StepIndicator from '@/components/StepIndicator.vue';
 import TextInput from '@/components/TextInput.vue';
 import DriverLayout from '@/layouts/DriverLayout.vue';
-import { uuid } from '@/lib/uuid';
 import { duration } from '@/lib/format';
-import type { DayOption, PlateParts, SlotOption } from '@/types';
+import { uuid } from '@/lib/uuid';
+import type { PlateParts, TruckTypeOption } from '@/types';
 import { router, useForm } from '@inertiajs/vue3';
 import { computed, ref, watch } from 'vue';
 
@@ -17,15 +17,13 @@ const props = defineProps<{
     driverName: string | null;
     driverNationalCode: string | null;
     lastTruck: { plate: PlateParts; truck_type_id: number | null } | null;
-    truckTypes: { id: number; name: string; capacity_tons: string | null; loading_minutes: number }[];
+    truckTypes: TruckTypeOption[];
     products: { id: number; name: string; load_tons: string | null; description: string | null }[];
-    days: DayOption[];
-    slots: SlotOption[];
-    selectedDate: string | null;
     plateLetters: string[];
 }>();
 
-const STEPS = ['کامیون', 'نوع بار', 'تاریخ و ساعت', 'تأیید'];
+// مرحله‌ی «تاریخ و ساعت» حذف شد: راننده ساعت انتخاب نمی‌کند، می‌بیند.
+const STEPS = ['کامیون', 'نوع بار', 'تأیید'];
 const step = ref(0);
 
 const form = useForm({
@@ -35,21 +33,17 @@ const form = useForm({
     plate_letter: props.lastTruck?.plate.letter ?? '',
     plate_three: props.lastTruck?.plate.three ?? '',
     plate_iran: props.lastTruck?.plate.iran ?? '',
-    truck_type_id: props.lastTruck?.truck_type_id ?? null as number | null,
+    truck_type_id: props.lastTruck?.truck_type_id ?? (null as number | null),
     product_id: null as number | null,
-    slot_id: null as number | null,
-    date: props.selectedDate ?? '',
     // هر بار که فرم باز می‌شود یک کلید تازه: کلیک دوم و سوم نوبت جدید نمی‌سازد
     idempotency_key: uuid(),
 });
 
-const loadingSlots = ref(false);
-
-const openDays = computed(() => props.days.filter((day) => day.is_open && day.remaining > 0));
 const selectedProduct = computed(() => props.products.find((p) => p.id === form.product_id) ?? null);
-const selectedSlot = computed(() => props.slots.find((s) => s.id === form.slot_id) ?? null);
-const selectedDay = computed(() => props.days.find((d) => d.date === form.date) ?? null);
 const selectedTruckType = computed(() => props.truckTypes.find((t) => t.id === form.truck_type_id) ?? null);
+
+/** نوبتی که همین حالا به این خودرو می‌رسد */
+const opening = computed(() => selectedTruckType.value?.opening ?? null);
 
 const plateComplete = computed(
     () =>
@@ -68,7 +62,6 @@ const canContinue = computed(() => {
             form.truck_type_id !== null
         );
     if (step.value === 1) return form.product_id !== null;
-    if (step.value === 2) return form.slot_id !== null;
     return true;
 });
 
@@ -79,24 +72,19 @@ watch(
         const keys = Object.keys(errors);
         if (!keys.length) return;
 
-        if (keys.some((k) => k.startsWith('plate') || k === 'driver_name' || k === 'national_code' || k === 'truck_type_id'))
+        if (
+            keys.some(
+                (k) =>
+                    k.startsWith('plate') ||
+                    k === 'driver_name' ||
+                    k === 'national_code' ||
+                    k === 'truck_type_id',
+            )
+        )
             step.value = 0;
         else if (keys.includes('product_id')) step.value = 1;
-        else if (keys.includes('slot_id')) step.value = 2;
     },
 );
-
-function pickDay(date: string) {
-    form.date = date;
-    form.slot_id = null;
-    loadingSlots.value = true;
-
-    router.reload({
-        only: ['slots', 'selectedDate'],
-        data: { date },
-        onFinish: () => (loadingSlots.value = false),
-    });
-}
 
 function next() {
     if (canContinue.value && step.value < STEPS.length - 1) step.value += 1;
@@ -116,10 +104,6 @@ function submit() {
     <DriverLayout title="گرفتن نوبت">
         <div class="space-y-6">
             <StepIndicator :steps="STEPS" :current="step" />
-
-            <AlertBox v-if="form.errors.slot_id && step !== 2" tone="error">
-                {{ form.errors.slot_id }}
-            </AlertBox>
 
             <!-- مرحله ۱: کامیون -->
             <section v-show="step === 0" class="card space-y-5 p-5">
@@ -163,21 +147,36 @@ function submit() {
                     />
                 </FormField>
 
+                <!-- نوع خودرو تنها چیزی است که ساعت نوبت را جابه‌جا می‌کند،
+                     چون مدت بارگیری از همین می‌آید. پس نوبتِ هر گزینه روی
+                     خودِ کارت نوشته می‌شود. -->
                 <FormField label="نوع خودرو" :error="form.errors.truck_type_id">
-                    <div class="grid grid-cols-2 gap-2">
+                    <div class="space-y-2">
                         <SelectCard
                             v-for="type in truckTypes"
                             :key="type.id"
                             :selected="form.truck_type_id === type.id"
                             @click="form.truck_type_id = type.id"
                         >
-                            <p class="font-medium text-slate-800">{{ type.name }}</p>
-                            <p v-if="type.capacity_tons" class="mt-0.5 text-xs text-slate-500">
-                                تا <span class="num">{{ Number(type.capacity_tons) }}</span> تن
-                            </p>
-                            <p class="mt-0.5 text-xs text-slate-400">
-                                بارگیری ≈ {{ duration(type.loading_minutes) }}
-                            </p>
+                            <div class="flex items-center justify-between gap-3">
+                                <div class="min-w-0">
+                                    <p class="font-medium text-slate-800">{{ type.name }}</p>
+                                    <p v-if="type.capacity_tons" class="mt-0.5 text-xs text-slate-500">
+                                        تا <span class="num">{{ Number(type.capacity_tons) }}</span> تن ·
+                                        بارگیری ≈ {{ duration(type.loading_minutes) }}
+                                    </p>
+                                </div>
+
+                                <div v-if="type.opening" class="shrink-0 text-left">
+                                    <p class="num text-sm font-bold text-brand-700" dir="ltr">
+                                        {{ type.opening.starts_at }}
+                                    </p>
+                                    <p class="text-[11px] text-slate-500">
+                                        {{ type.opening.is_today ? 'امروز' : type.opening.day_label.split(' ')[0] }}
+                                    </p>
+                                </div>
+                                <p v-else class="shrink-0 text-[11px] text-amber-700">جای خالی نیست</p>
+                            </div>
                         </SelectCard>
                     </div>
                 </FormField>
@@ -209,110 +208,59 @@ function submit() {
                 </FormField>
             </section>
 
-            <!-- مرحله ۳: تاریخ و ساعت -->
-            <section v-show="step === 2" class="space-y-5">
-                <FormField label="تاریخ مراجعه">
-                    <div class="-mx-1 flex gap-2 overflow-x-auto px-1 pb-2">
-                        <button
-                            v-for="day in openDays"
-                            :key="day.date"
-                            type="button"
-                            :class="[
-                                'w-24 shrink-0 rounded-xl border p-3 text-center transition',
-                                form.date === day.date
-                                    ? 'border-brand-500 bg-brand-50/60 ring-1 ring-brand-500'
-                                    : 'border-slate-200 bg-white hover:border-brand-300',
-                            ]"
-                            @click="pickDay(day.date)"
-                        >
-                            <p class="text-xs text-slate-500">{{ day.is_today ? 'امروز' : day.jalali_label.split(' ')[0] }}</p>
-                            <p class="num mt-1 text-sm font-semibold text-slate-800">{{ day.jalali }}</p>
-                            <p class="mt-1 text-[11px] text-slate-400">
-                                <span class="num">{{ day.remaining }}</span> جای خالی
-                            </p>
-                        </button>
+            <!-- مرحله ۳: تأیید -->
+            <section v-show="step === 2" class="space-y-4">
+                <!-- نوبتی که سامانه اعلام می‌کند -->
+                <div v-if="opening" class="card overflow-hidden">
+                    <div class="bg-brand-50 px-5 py-4 text-center">
+                        <p class="text-xs text-brand-800">زمان نوبت شما</p>
+                        <p class="num mt-1 text-3xl font-bold text-brand-900" dir="ltr">
+                            {{ opening.starts_at }}
+                        </p>
+                        <p class="mt-1 text-sm font-medium text-brand-800">
+                            {{ opening.is_today ? 'امروز' : opening.day_label }} — {{ opening.jalali }}
+                        </p>
                     </div>
 
-                    <AlertBox v-if="!openDays.length" tone="warning">
-                        در حال حاضر روز خالی برای نوبت‌دهی وجود ندارد.
-                    </AlertBox>
-                </FormField>
+                    <p class="border-t border-brand-100 px-5 py-3 text-center text-xs text-slate-500">
+                        تخمین پایان بارگیری: <span class="num font-medium text-slate-700">{{ opening.ends_at }}</span>
+                        · مدت {{ duration(opening.loading_minutes) }}
+                    </p>
+                </div>
 
-                <FormField v-if="form.date" label="ساعت مراجعه" :error="form.errors.slot_id">
-                    <div v-if="loadingSlots" class="grid grid-cols-3 gap-2">
-                        <div v-for="n in 6" :key="n" class="h-16 animate-pulse rounded-xl bg-slate-100" />
-                    </div>
+                <AlertBox v-else tone="warning">
+                    برای این نوع خودرو تا انتهای افق نوبت‌دهی جای خالی نیست.
+                    نوع خودروی دیگری انتخاب کنید یا بعداً دوباره تلاش کنید.
+                </AlertBox>
 
-                    <div v-else-if="slots.length" class="grid grid-cols-3 gap-2">
-                        <button
-                            v-for="slot in slots"
-                            :key="slot.id"
-                            type="button"
-                            :disabled="!slot.selectable"
-                            :class="[
-                                'rounded-xl border p-2.5 text-center transition',
-                                !slot.selectable
-                                    ? 'cursor-not-allowed border-slate-200 bg-slate-50 text-slate-300'
-                                    : form.slot_id === slot.id
-                                      ? 'border-brand-500 bg-brand-50/60 ring-1 ring-brand-500'
-                                      : 'border-slate-200 bg-white hover:border-brand-300',
-                            ]"
-                            @click="form.slot_id = slot.id"
-                        >
-                            <p class="num text-sm font-semibold">{{ slot.start_time }}</p>
-                            <p class="mt-0.5 text-[11px]" :class="slot.selectable ? 'text-slate-500' : 'text-slate-300'">
-                                <span v-if="slot.remaining > 0">
-                                    <span class="num">{{ slot.remaining }}</span> جا
-                                </span>
-                                <span v-else>تکمیل</span>
-                            </p>
-                        </button>
-                    </div>
+                <section class="card divide-y divide-slate-100 p-5">
+                    <dl class="space-y-3 pb-4">
+                        <div class="flex justify-between gap-3">
+                            <dt class="text-sm text-slate-500">راننده</dt>
+                            <dd class="text-sm font-medium text-slate-800">{{ form.driver_name }}</dd>
+                        </div>
+                        <div class="flex justify-between gap-3">
+                            <dt class="text-sm text-slate-500">پلاک</dt>
+                            <dd class="num text-sm font-medium text-slate-800" dir="ltr">
+                                {{ form.plate_two }} {{ form.plate_letter }} {{ form.plate_three }} — {{ form.plate_iran }}
+                            </dd>
+                        </div>
+                        <div class="flex justify-between gap-3">
+                            <dt class="text-sm text-slate-500">نوع خودرو</dt>
+                            <dd class="text-sm font-medium text-slate-800">{{ selectedTruckType?.name ?? '—' }}</dd>
+                        </div>
+                        <div class="flex justify-between gap-3">
+                            <dt class="text-sm text-slate-500">نوع بار</dt>
+                            <dd class="text-sm font-medium text-slate-800">{{ selectedProduct?.name ?? '—' }}</dd>
+                        </div>
+                    </dl>
 
-                    <AlertBox v-else tone="warning">این روز ساعت خالی ندارد.</AlertBox>
-                </FormField>
-            </section>
-
-            <!-- مرحله ۴: تأیید -->
-            <section v-show="step === 3" class="card divide-y divide-slate-100 p-5">
-                <dl class="space-y-3 pb-4">
-                    <div class="flex justify-between gap-3">
-                        <dt class="text-sm text-slate-500">راننده</dt>
-                        <dd class="text-sm font-medium text-slate-800">{{ form.driver_name }}</dd>
-                    </div>
-                    <div class="flex justify-between gap-3">
-                        <dt class="text-sm text-slate-500">پلاک</dt>
-                        <dd class="num text-sm font-medium text-slate-800" dir="ltr">
-                            {{ form.plate_two }} {{ form.plate_letter }} {{ form.plate_three }} — {{ form.plate_iran }}
-                        </dd>
-                    </div>
-                    <div class="flex justify-between gap-3">
-                        <dt class="text-sm text-slate-500">نوع خودرو</dt>
-                        <dd class="text-sm font-medium text-slate-800">{{ selectedTruckType?.name ?? '—' }}</dd>
-                    </div>
-                    <div class="flex justify-between gap-3">
-                        <dt class="text-sm text-slate-500">نوع بار</dt>
-                        <dd class="text-sm font-medium text-slate-800">{{ selectedProduct?.name ?? '—' }}</dd>
-                    </div>
-                    <div class="flex justify-between gap-3">
-                        <dt class="text-sm text-slate-500">تاریخ</dt>
-                        <dd class="num text-sm font-medium text-slate-800">{{ selectedDay?.jalali ?? '—' }}</dd>
-                    </div>
-                    <div class="flex justify-between gap-3">
-                        <dt class="text-sm text-slate-500">ساعت</dt>
-                        <dd class="num text-sm font-medium text-slate-800">{{ selectedSlot?.start_time ?? '—' }}</dd>
-                    </div>
-                    <div v-if="selectedTruckType" class="flex justify-between gap-3">
-                        <dt class="text-sm text-slate-500">مدت بارگیری (تخمینی)</dt>
-                        <dd class="text-sm font-medium text-slate-800">
-                            {{ duration(selectedTruckType.loading_minutes) }}
-                        </dd>
-                    </div>
-                </dl>
-
-                <p class="pt-4 text-xs text-slate-500">
-                    با ثبت نوبت، شماره نوبت و کد QR برای شما صادر می‌شود. هنگام ورود به کارخانه کد QR را نشان دهید.
-                </p>
+                    <p class="pt-4 text-xs text-slate-500">
+                        ترتیب نوبت‌ها را کارخانه تعیین می‌کند. ساعت بالا تا لحظه‌ی ثبت تخمینی است؛
+                        اگر در همین فاصله کسی دیگر نوبت گرفته باشد، ساعت قطعیِ شما در صفحه‌ی
+                        نوبت و پیامک اعلام می‌شود.
+                    </p>
+                </section>
             </section>
 
             <div class="flex gap-3">
@@ -324,7 +272,7 @@ function submit() {
                     ادامه
                 </AppButton>
 
-                <AppButton v-else size="lg" :loading="form.processing" @click="submit">
+                <AppButton v-else size="lg" :loading="form.processing" :disabled="!opening" @click="submit">
                     ثبت نهایی نوبت
                 </AppButton>
             </div>

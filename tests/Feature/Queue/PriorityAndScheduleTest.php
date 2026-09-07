@@ -8,7 +8,6 @@ use App\Domain\Access\Roles;
 use App\Domain\Appointment\Actions\CreateAppointment;
 use App\Domain\Queue\QueueService;
 use App\Models\Appointment;
-use App\Models\AppointmentSlot;
 use App\Models\Factory;
 use App\Models\Product;
 use App\Models\TruckType;
@@ -38,7 +37,7 @@ final class PriorityAndScheduleTest extends TestCase
         $this->freezeOnWorkingMorning($this->factory);
     }
 
-    private function book(string $mobile, string $two, AppointmentSlot $slot, ?Product $product = null): Appointment
+    private function book(string $mobile, string $two, ?Product $product = null): Appointment
     {
         $truck = $this->makeTruck($two, 'ب', '345', '11');
         $truck->update(['truck_type_id' => TruckType::orderBy('id')->value('id')]);
@@ -47,15 +46,16 @@ final class PriorityAndScheduleTest extends TestCase
             $this->factory,
             $this->makeDriver($mobile),
             $truck->refresh(),
-            $slot,
             $product,
         ));
     }
 
     #[Test]
-    public function test_a_priority_product_is_served_first_inside_the_same_hour(): void
+    public function test_a_priority_product_is_served_first_at_the_same_start_time(): void
     {
-        $slot = $this->todaySlot($this->factory);
+        // با زمان‌بندی سریالی، دو نوبت فقط وقتی ساعت یکسان دارند که روی دو
+        // لاین موازی بنشینند — و اولویت دقیقاً همان‌جا تصمیم می‌گیرد.
+        $this->factory->update(['loading_lines' => 2]);
 
         $normal = Product::where('factory_id', $this->factory->id)->orderBy('id')->firstOrFail();
 
@@ -70,11 +70,13 @@ final class PriorityAndScheduleTest extends TestCase
         ]);
 
         // عادی زودتر ثبت می‌شود، پس شماره‌ی کوچک‌تری دارد
-        $first = $this->book('09120000001', '11', $slot, $normal);
-        $second = $this->book('09120000002', '22', $slot, $urgent);
+        $first = $this->book('09120000001', '11', $normal);
+        $second = $this->book('09120000002', '22', $urgent);
+
+        $this->assertSame($first->start_time, $second->start_time, 'هر دو باید ساعت یکسان بگیرند');
 
         $order = Appointment::where('factory_id', $this->factory->id)
-            ->whereDate('date', $slot->date)
+            ->whereDate('date', $first->date)
             ->queueOrder()
             ->pluck('id')
             ->all();
@@ -86,29 +88,31 @@ final class PriorityAndScheduleTest extends TestCase
     #[Test]
     public function test_priority_never_jumps_over_an_earlier_hour(): void
     {
-        $early = $this->todaySlot($this->factory, 0);
-        $late = $this->todaySlot($this->factory, 2);
+        // یک لاین: نوبت دوم قطعاً ساعت دیرتری می‌گیرد
+        $this->factory->update(['loading_lines' => 1]);
 
-        $earlyAppointment = $this->book('09120000001', '11', $early);
-        $lateAppointment = $this->book('09120000002', '22', $late);
+        $earlyAppointment = $this->book('09120000001', '11');
+        $lateAppointment = $this->book('09120000002', '22');
 
-        // نوبت ساعت بعد بالاترین اولویت را می‌گیرد
+        $this->assertNotSame($earlyAppointment->start_time, $lateAppointment->start_time);
+
+        // نوبت دیرتر بالاترین اولویت را می‌گیرد
         $lateAppointment->update(['priority' => 100, 'priority_reason' => 'تست']);
 
         $order = Appointment::where('factory_id', $this->factory->id)
-            ->whereDate('date', $early->date)
+            ->whereDate('date', $earlyAppointment->date)
             ->queueOrder()
             ->pluck('id')
             ->all();
 
-        // ...و باز هم پشت نوبت ساعت قبل می‌ماند
+        // ...و باز هم پشت نوبتِ ساعتِ زودتر می‌ماند
         $this->assertSame([$earlyAppointment->id, $lateAppointment->id], $order);
     }
 
     #[Test]
     public function test_an_operator_must_give_a_reason_to_change_a_priority(): void
     {
-        $appointment = $this->book('09120000001', '11', $this->todaySlot($this->factory));
+        $appointment = $this->book('09120000001', '11');
         $operator = $this->operator();
 
         $this->actingAs($operator)
@@ -131,7 +135,7 @@ final class PriorityAndScheduleTest extends TestCase
     #[Test]
     public function test_a_gate_guard_cannot_reorder_the_queue(): void
     {
-        $appointment = $this->book('09120000001', '11', $this->todaySlot($this->factory));
+        $appointment = $this->book('09120000001', '11');
 
         $this->actingAs($this->staff(Roles::GATE, 'gate@test.local'))
             ->post(route('staff.queue.priority', $appointment), [
@@ -148,19 +152,22 @@ final class PriorityAndScheduleTest extends TestCase
     {
         TruckType::query()->update(['loading_minutes' => 45]);
 
-        $appointment = $this->book('09120000001', '11', $this->todaySlot($this->factory));
+        $appointment = $this->book('09120000001', '11');
 
         $schedule = app(QueueService::class)->plannedSchedule($appointment->refresh());
 
         $this->assertSame(45, $schedule['loading_minutes']);
 
-        // اولین نفر صف: بارگیری از خودِ ساعت نوبت شروع می‌شود
-        $this->assertSame(0, $schedule['queue_minutes']);
-
         // ساعت‌ها روی سرور فرمت می‌شوند، وگرنه گوشیِ روی UTC ۰۷:۰۰ را
         // ۰۳:۳۰ نشان می‌دهد
         $this->assertSame($appointment->startsAt()->format('H:i'), $schedule['starts_at']);
         $this->assertSame($appointment->startsAt()->addMinutes(45)->format('H:i'), $schedule['ends_at']);
+
+        // «چقدر تا نوبت من مانده» از همان ساعت اعلام‌شده می‌آید
+        $this->assertSame(
+            (int) max(0, now()->diffInMinutes($appointment->startsAt(), false)),
+            $schedule['starts_in_minutes'],
+        );
     }
 
     #[Test]
@@ -168,24 +175,31 @@ final class PriorityAndScheduleTest extends TestCase
     {
         $this->factory->update(['loading_lines' => 1]);
 
-        $slot = $this->todaySlot($this->factory);
-
         TruckType::query()->update(['loading_minutes' => 60]);
 
-        $this->book('09120000001', '11', $slot);
-        $mine = $this->book('09120000002', '22', $slot);
+        $ahead = $this->book('09120000001', '11');
+        $mine = $this->book('09120000002', '22');
 
         $schedule = app(QueueService::class)->plannedSchedule($mine->refresh());
 
-        // یک کامیون ۶۰ دقیقه‌ای جلوتر، روی یک لاین
-        $this->assertSame(60, $schedule['queue_minutes']);
-        $this->assertSame($mine->startsAt()->addMinutes(60)->format('H:i'), $schedule['starts_at']);
+        // یک کامیون ۶۰ دقیقه‌ای جلوتر روی همان لاین: نوبت من دقیقاً از
+        // لحظه‌ای شروع می‌شود که کار او تمام می‌شود.
+        $this->assertSame($ahead->end_time, $mine->start_time);
+        $this->assertSame(
+            $ahead->startsAt()->addMinutes(60)->format('H:i'),
+            $schedule['starts_at'],
+        );
     }
 
     #[Test]
     public function test_the_driver_is_told_the_time_for_a_future_appointment_too(): void
     {
-        $appointment = $this->book('09120000001', '11', $this->futureSlot($this->factory));
+        // مهلت رسیدنِ بلند، نوبت را از امروز بیرون می‌برد
+        $this->factory->update(['booking_lead_minutes' => 60 * 30]);
+
+        $appointment = $this->book('09120000001', '11');
+
+        $this->assertFalse($appointment->date->isToday());
 
         $driver = $appointment->driver;
 

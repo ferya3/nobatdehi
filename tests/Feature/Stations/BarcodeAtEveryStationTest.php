@@ -56,7 +56,6 @@ final class BarcodeAtEveryStationTest extends TestCase
             $this->factory,
             $this->makeDriver('09123456789'),
             $this->makeTruck('12', 'ب', '345', '11'),
-            $this->todaySlot($this->factory),
         ));
 
         return app(TransitionAppointment::class)($appointment, AppointmentStatus::CheckedIn, Actor::system());

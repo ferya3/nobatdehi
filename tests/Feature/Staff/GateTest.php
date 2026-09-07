@@ -41,7 +41,6 @@ final class GateTest extends TestCase
             $this->factory,
             $this->makeDriver('0912100'.$plateTwo.'00'),
             $this->makeTruck($plateTwo, 'ب', '345', '67'),
-            $this->futureSlot($this->factory),
         ));
 
         $appointment->forceFill(['date' => now()->toDateString()])->save();

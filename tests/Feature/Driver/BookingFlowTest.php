@@ -8,7 +8,6 @@ use App\Domain\Appointment\Actions\CreateAppointment;
 use App\Domain\Appointment\Enums\AppointmentStatus;
 use App\Domain\Appointment\Support\QrToken;
 use App\Models\Appointment;
-use App\Models\AppointmentSlot;
 use App\Models\Driver;
 use App\Models\Product;
 use App\Models\TruckType;
@@ -33,8 +32,15 @@ final class BookingFlowTest extends TestCase
         $this->driver = $this->makeDriver('09123456789')->refresh();
     }
 
-    /** @return array<string, mixed> */
-    private function payload(AppointmentSlot $slot, array $overrides = []): array
+    /**
+     * درخواست نوبت — بدون ساعت.
+     *
+     * slot_id حذف شد چون راننده ساعتی انتخاب نمی‌کند و سرور هم چنین فیلدی
+     * را نمی‌پذیرد.
+     *
+     * @return array<string, mixed>
+     */
+    private function payload(array $overrides = []): array
     {
         return array_merge([
             'driver_name' => 'علی رضایی',
@@ -45,13 +51,12 @@ final class BookingFlowTest extends TestCase
             'plate_iran' => '67',
             'truck_type_id' => TruckType::where('code', 'teriler')->value('id'),
             'product_id' => Product::where('factory_id', $this->factory->id)->value('id'),
-            'slot_id' => $slot->id,
             'idempotency_key' => 'test-'.uniqid(),
         ], $overrides);
     }
 
     #[Test]
-    public function the_booking_page_offers_days_products_and_truck_types(): void
+    public function the_booking_page_announces_a_time_instead_of_offering_a_choice(): void
     {
         $this->actingAs($this->driver, 'driver')
             ->get(route('driver.booking.create'))
@@ -60,30 +65,20 @@ final class BookingFlowTest extends TestCase
                 ->component('Driver/Booking/Create')
                 ->has('truckTypes', 5)
                 ->has('products', 2)
-                ->has('days')
-                ->has('plateLetters'));
+                ->has('plateLetters')
+                // نه فهرست روز، نه فهرست ساعت — انتخابی در کار نیست
+                ->missing('days')
+                ->missing('slots')
+                // به‌جایش: نوبتی که همین حالا به هر نوع خودرو می‌رسد
+                ->has('truckTypes.0.opening.starts_at')
+                ->has('truckTypes.0.opening.date'));
     }
 
     #[Test]
-    public function slots_for_a_day_arrive_through_a_partial_reload(): void
+    public function a_driver_books_and_the_system_names_the_time(): void
     {
-        $slot = $this->futureSlot($this->factory);
-
         $this->actingAs($this->driver, 'driver')
-            ->get(route('driver.booking.create', ['date' => $slot->date->toDateString()]))
-            ->assertOk()
-            ->assertInertia(fn (AssertableInertia $page) => $page
-                ->where('selectedDate', $slot->date->toDateString())
-                ->has('slots'));
-    }
-
-    #[Test]
-    public function a_driver_can_book_a_slot_end_to_end(): void
-    {
-        $slot = $this->futureSlot($this->factory);
-
-        $this->actingAs($this->driver, 'driver')
-            ->post(route('driver.booking.store'), $this->payload($slot))
+            ->post(route('driver.booking.store'), $this->payload())
             ->assertRedirect()
             ->assertSessionHas('success');
 
@@ -93,33 +88,39 @@ final class BookingFlowTest extends TestCase
         $this->assertSame($this->driver->id, $appointment->driver_id);
         $this->assertSame('12-ب-345-67', $appointment->truck->plate_key);
         $this->assertSame('علی رضایی', $this->driver->fresh()->name);
-        $this->assertSame(1, $slot->fresh()->reserved_count);
+
+        // ساعت را سرور گذاشته و طولش از نوع خودرو آمده
+        $this->assertNotNull($appointment->start_time);
+        $this->assertTrue($appointment->startsAt()->lessThan($appointment->startsAt()->addDay()));
+        $this->assertGreaterThanOrEqual(1, (int) $appointment->line_no);
     }
 
     #[Test]
     public function submitting_twice_with_one_idempotency_key_issues_one_appointment(): void
     {
-        $slot = $this->futureSlot($this->factory);
-        $payload = $this->payload($slot, ['idempotency_key' => 'double-tap']);
+        $payload = $this->payload(['idempotency_key' => 'double-tap']);
 
         $this->actingAs($this->driver, 'driver')->post(route('driver.booking.store'), $payload);
         $this->actingAs($this->driver, 'driver')->post(route('driver.booking.store'), $payload);
 
         $this->assertSame(1, Appointment::count());
-        $this->assertSame(1, $slot->fresh()->reserved_count);
     }
 
     #[Test]
-    public function a_full_slot_returns_a_field_error_rather_than_an_exception(): void
+    public function running_out_of_room_returns_a_field_error_rather_than_an_exception(): void
     {
-        $slot = $this->futureSlot($this->factory);
-        $slot->update(['capacity' => 0]);
+        // افق یک روزه و خودرویی که بیش از یک روز کاری بارگیری می‌خواهد.
+        // مدت از نوع خودرو خوانده می‌شود و نه از محصول — همان ترتیبی که
+        // Appointment::expectedLoadingMinutes() دارد.
+        $this->factory->update(['booking_horizon_days' => 1, 'loading_lines' => 1]);
+        TruckType::where('code', 'teriler')->update(['loading_minutes' => 60 * 24]);
 
         $this->actingAs($this->driver, 'driver')
             ->from(route('driver.booking.create'))
-            ->post(route('driver.booking.store'), $this->payload($slot))
+            ->post(route('driver.booking.store'), $this->payload())
             ->assertRedirect(route('driver.booking.create'))
-            ->assertSessionHasErrors('slot_id');
+            // «جا نیست» به نوع خودرو می‌چسبد؛ تنها چیزی که راننده می‌تواند عوض کند
+            ->assertSessionHasErrors('truck_type_id');
 
         $this->assertSame(0, Appointment::count());
     }
@@ -127,10 +128,8 @@ final class BookingFlowTest extends TestCase
     #[Test]
     public function an_invalid_plate_letter_is_rejected(): void
     {
-        $slot = $this->futureSlot($this->factory);
-
         $this->actingAs($this->driver, 'driver')
-            ->post(route('driver.booking.store'), $this->payload($slot, ['plate_letter' => 'Z']))
+            ->post(route('driver.booking.store'), $this->payload(['plate_letter' => 'Z']))
             ->assertSessionHasErrors('plate_letter');
     }
 
@@ -177,7 +176,6 @@ final class BookingFlowTest extends TestCase
             $this->factory,
             $this->makeDriver('09120000077'),
             $this->makeTruck('88', 'ج', '888', '88'),
-            $this->futureSlot($this->factory, 1),
         ));
 
         $this->assertFalse(QrToken::matches($other, $token));
@@ -195,19 +193,15 @@ final class BookingFlowTest extends TestCase
     }
 
     #[Test]
-    public function a_driver_can_cancel_before_arriving_and_the_slot_is_freed(): void
+    public function a_driver_can_cancel_before_arriving(): void
     {
         $appointment = $this->book();
-        $slot = $appointment->slot;
-
-        $this->assertSame(1, $slot->fresh()->reserved_count);
 
         $this->actingAs($this->driver, 'driver')
             ->post(route('driver.appointments.cancel', $appointment))
             ->assertRedirect(route('driver.home'));
 
         $this->assertSame(AppointmentStatus::Cancelled, $appointment->fresh()->status);
-        $this->assertSame(0, $slot->fresh()->reserved_count);
     }
 
     #[Test]
@@ -258,7 +252,6 @@ final class BookingFlowTest extends TestCase
             $this->factory,
             $this->driver,
             $this->makeTruck('12', 'ب', '345', '67'),
-            $this->futureSlot($this->factory),
         ));
     }
 }

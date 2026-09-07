@@ -85,7 +85,6 @@ final class WeighbridgeTest extends TestCase
             $this->factory,
             $this->makeDriver('09123456789'),
             $this->truck->refresh(),
-            $this->todaySlot($this->factory),
             $this->product,
         ));
 
@@ -271,7 +270,6 @@ final class WeighbridgeTest extends TestCase
                 $this->factory,
                 $this->makeDriver($mobile),
                 $truck->refresh(),
-                $this->todaySlot($this->factory, $i),
                 $this->product,
             ));
 

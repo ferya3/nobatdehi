@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace App\Listeners;
 
 use App\Domain\Queue\QueueService;
+use App\Domain\Sms\ManagerRecipients;
 use App\Domain\Sms\SmsService;
 use App\Events\AppointmentCreated;
 use App\Events\QueueChanged;
 use App\Models\Appointment;
-use App\Models\Setting;
 use App\Support\Digits;
 use App\Support\Jalali;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -61,7 +61,7 @@ class NotifyOnAppointmentCreated implements ShouldQueue
             $appointment,
         );
 
-        foreach (self::managerRecipients() as $recipient) {
+        foreach (ManagerRecipients::all() as $recipient) {
             $this->sms->queueTemplate('appointment.created.manager', $recipient, $variables, $appointment);
         }
 
@@ -71,18 +71,5 @@ class NotifyOnAppointmentCreated implements ShouldQueue
             $appointment->number,
             $appointment->status->value,
         );
-    }
-
-    /**
-     * شماره‌های مدیران از تنظیمات پنل خوانده می‌شوند تا تغییرشان نیاز به
-     * ویرایش .env و ری‌استارت سرویس نداشته باشد.
-     *
-     * @return array<int, string>
-     */
-    private static function managerRecipients(): array
-    {
-        $raw = Setting::get('sms_manager_recipients');
-
-        return array_values(array_filter(array_map('trim', explode(',', $raw))));
     }
 }

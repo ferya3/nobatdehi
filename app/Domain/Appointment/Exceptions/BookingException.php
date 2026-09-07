@@ -19,29 +19,18 @@ class BookingException extends RuntimeException
         parent::__construct($message);
     }
 
-    public static function slotFull(): self
+    /**
+     * تا انتهای افق نوبت‌دهی جایی برای این کامیون نیست.
+     *
+     * جانشین خطاهای قبلیِ «این ساعت پر است» و «این ساعت گذشته» شد: وقتی
+     * راننده ساعتی انتخاب نمی‌کند، خطایی هم درباره‌ی انتخابش وجود ندارد.
+     */
+    public static function noOpening(int $days): self
     {
-        return new self('slot_full', 'ظرفیت این ساعت تکمیل شده است. لطفاً ساعت دیگری انتخاب کنید.');
-    }
-
-    public static function slotBlocked(): self
-    {
-        return new self('slot_blocked', 'این ساعت توسط کارخانه بسته شده است.');
-    }
-
-    public static function slotPast(): self
-    {
-        return new self('slot_past', 'این ساعت گذشته است یا برای نوبت‌گیری خیلی نزدیک است.');
-    }
-
-    public static function slotOutOfHorizon(int $days): self
-    {
-        return new self('slot_out_of_horizon', "نوبت‌گیری فقط تا {$days} روز آینده امکان‌پذیر است.");
-    }
-
-    public static function slotMismatch(): self
-    {
-        return new self('slot_mismatch', 'ساعت انتخاب‌شده متعلق به این کارخانه نیست.');
+        return new self(
+            'no_opening',
+            "تا {$days} روز آینده جای خالی برای این خودرو نیست. بعداً دوباره تلاش کنید.",
+        );
     }
 
     public static function dailyCapacityReached(): self

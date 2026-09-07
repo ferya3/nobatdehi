@@ -90,7 +90,6 @@ final class TruckTypeManagementTest extends TestCase
             $this->factory,
             $this->makeDriver('09123456789'),
             $truck->refresh(),
-            $this->futureSlot($this->factory),
         ));
 
         $appointment->load('truck.truckType', 'product', 'factory');
@@ -136,7 +135,6 @@ final class TruckTypeManagementTest extends TestCase
             $this->factory,
             $this->makeDriver('09123456789'),
             $truck->refresh(),
-            $this->futureSlot($this->factory),
         ));
 
         // نوع کامیون بر مدت محصول اولویت دارد
@@ -170,14 +168,12 @@ final class TruckTypeManagementTest extends TestCase
                 $this->factory,
                 $aheadDriver,
                 $aheadTruck->refresh(),
-                $slots[0],
             ));
 
             $mine = app(CreateAppointment::class)($this->booking(
                 $this->factory,
                 $myDriver,
                 $this->makeTruck('22', 'ب', '222', '22'),
-                $slots[1],
             ));
 
             // درست پیش از ساعت نوبت: دیگر «تا شروع اسلات» بر تخمین غالب نیست
@@ -197,7 +193,7 @@ final class TruckTypeManagementTest extends TestCase
     }
 
     #[Test]
-    public function test_the_grace_period_frees_the_slot_by_marking_a_no_show(): void
+    public function test_the_grace_period_frees_the_days_capacity_by_marking_a_no_show(): void
     {
         $type = TruckType::where('code', 'khavar')->firstOrFail();
         $type->update(['grace_minutes' => 30]);
@@ -205,24 +201,21 @@ final class TruckTypeManagementTest extends TestCase
         $truck = $this->makeTruck('12', 'ب', '345', '11');
         $truck->update(['truck_type_id' => $type->id]);
 
-        $slot = $this->todaySlot($this->factory, 0);
-
         $appointment = app(CreateAppointment::class)($this->booking(
             $this->factory,
             $this->makeDriver('09123456789'),
             $truck->refresh(),
-            $slot,
         ));
 
-        $reservedBefore = $slot->refresh()->reserved_count;
-
-        // ۳۱ دقیقه بعد از شروع اسلات: یک دقیقه بعد از پایان مهلت
+        // ۳۱ دقیقه بعد از ساعت نوبت: یک دقیقه بعد از پایان مهلت حضور
         $this->travelTo($appointment->startsAt()->addMinutes(31));
 
         $this->artisan('appointments:no-show')->assertSuccessful();
 
         $this->assertSame(AppointmentStatus::NoShow, $appointment->refresh()->status);
-        $this->assertSame($reservedBefore - 1, $slot->refresh()->reserved_count);
+
+        // ظرفیت روز آزاد می‌شود — نوبتِ عدم‌حضور دیگر فعال شمرده نمی‌شود
+        $this->assertSame(0, Appointment::whereIn('status', AppointmentStatus::activeValues())->count());
     }
 
     #[Test]
@@ -238,7 +231,6 @@ final class TruckTypeManagementTest extends TestCase
             $this->factory,
             $this->makeDriver('09123456789'),
             $truck->refresh(),
-            $this->todaySlot($this->factory, 0),
         ));
 
         $this->travelTo($appointment->startsAt()->addMinutes(30));

@@ -8,20 +8,18 @@ use App\Domain\Appointment\AppointmentStateMachine;
 use App\Domain\Appointment\TransitionPreconditions;
 use App\Domain\Appointment\Data\Actor;
 use App\Domain\Appointment\Enums\AppointmentStatus;
-use App\Domain\Appointment\Exceptions\BookingException;
 use App\Domain\Appointment\Exceptions\InvalidStateTransition;
 use App\Events\AppointmentTransitioned;
 use App\Models\Appointment;
-use App\Models\AppointmentSlot;
 use Illuminate\Support\Facades\DB;
 
 /**
  * تنها راه تغییر وضعیت یک نوبت.
  *
- * قرارداد ظرفیت: appointment_slots.reserved_count همیشه برابر تعداد نوبت‌های
- * «فعال» آن اسلات است. پس هر خروج از مجموعه‌ی فعال ظرفیت را آزاد و هر بازگشت
- * به آن، ظرفیت را دوباره اشغال می‌کند — و بازگشت می‌تواند به‌دلیل پرشدن اسلات
- * شکست بخورد. این دقیقاً همان حالتی است که در آن باید شکست بخورد.
+ * جای نوبت در برنامه به وضعیتش وابسته نیست: لغو، جای خالی نمی‌سازد و
+ * بازگردانی هم چیزی را دوباره اشغال نمی‌کند. ساعتی که به راننده اعلام شده
+ * تا آخر مالِ اوست، حتی وقتی نوبت بسته شده باشد — وگرنه بازگرداندنِ یک لغوِ
+ * اشتباه می‌توانست شکست بخورد، آن هم دقیقاً وقتی که بیشترین نیاز به آن هست.
  */
 final class TransitionAppointment
 {
@@ -59,8 +57,8 @@ final class TransitionAppointment
                 $this->preconditions->assert($fresh, $to);
             }
 
-            $this->syncCapacity($fresh, $from, $to);
-
+            // جای نوبت در صف با لغو آزاد نمی‌شود و با بازگردانی هم دوباره
+            // گرفته نمی‌شود: ساعتِ اعلام‌شده به راننده ثابت می‌ماند.
             $fresh->status = $to;
             $fresh->loading_point_id = $loadingPointId ?? $fresh->loading_point_id;
             $this->stamp($fresh, $to);
@@ -115,31 +113,6 @@ final class TransitionAppointment
         }
 
         // COMPLETED: نوبت موفق بسته شده — چیزی برای پاک کردن یا نوشتن نیست.
-    }
-
-    /** ظرفیت اسلات را با ورود به/خروج از مجموعه‌ی فعال هماهنگ می‌کند. */
-    private function syncCapacity(Appointment $appointment, AppointmentStatus $from, AppointmentStatus $to): void
-    {
-        if ($from->isActive() === $to->isActive()) {
-            return;
-        }
-
-        /** @var AppointmentSlot $slot */
-        $slot = AppointmentSlot::whereKey($appointment->slot_id)->lockForUpdate()->firstOrFail();
-
-        if ($to->isActive()) {
-            if ($slot->reserved_count >= $slot->capacity) {
-                throw BookingException::slotFull();
-            }
-
-            $slot->increment('reserved_count');
-
-            return;
-        }
-
-        if ($slot->reserved_count > 0) {
-            $slot->decrement('reserved_count');
-        }
     }
 
     /** زمان هر وضعیت را ثبت می‌کند — پایه‌ی تمام گزارش‌های زمانی. */

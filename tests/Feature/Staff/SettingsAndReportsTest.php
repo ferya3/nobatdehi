@@ -102,23 +102,18 @@ final class SettingsAndReportsTest extends TestCase
     }
 
     #[Test]
-    public function lowering_capacity_never_drops_below_what_is_already_reserved(): void
+    public function lowering_the_working_hours_never_moves_an_issued_appointment(): void
     {
-        $slot = $this->futureSlot($this->factory);
+        // پنج نوبت صادر می‌شود
+        $issued = collect(range(0, 4))->map(fn (int $i) => app(CreateAppointment::class)($this->booking(
+            $this->factory,
+            $this->makeDriver('0912200000'.$i),
+            $this->makeTruck(str_pad((string) (40 + $i), 2, '0', STR_PAD_LEFT), 'ب', '345', '67'),
+        )));
 
-        // پنج نوبت روی یک اسلات ثبت می‌کنیم
-        foreach (range(0, 4) as $i) {
-            app(CreateAppointment::class)($this->booking(
-                $this->factory,
-                $this->makeDriver('0912200000'.$i),
-                $this->makeTruck(str_pad((string) (40 + $i), 2, '0', STR_PAD_LEFT), 'ب', '345', '67'),
-                $slot,
-            ));
-        }
+        $before = $issued->map(fn ($a) => [$a->date->toDateString(), $a->start_time, $a->line_no])->all();
 
-        $this->assertSame(5, $slot->fresh()->reserved_count);
-
-        // بعد ظرفیت هر اسلات را به ۱ کاهش می‌دهیم
+        // بعد ساعات کاری تنگ‌تر می‌شود
         $this->actingAs($this->staff(Roles::FACTORY_MANAGER))->put(
             route('staff.settings.update'),
             $this->settingsPayload([
@@ -126,17 +121,19 @@ final class SettingsAndReportsTest extends TestCase
                 'working_hours' => collect(range(0, 6))->map(fn (int $w) => [
                     'weekday' => $w,
                     'is_open' => $w !== 6,
-                    'opens_at' => '07:00',
-                    'closes_at' => '18:00',
+                    'opens_at' => '09:00',
+                    'closes_at' => '12:00',
                     'capacity_per_slot' => 1,
                 ])->all(),
             ]),
         );
 
-        $fresh = $slot->fresh();
+        // ساعتی که به راننده اعلام شده، با تغییر تنظیمات جابه‌جا نمی‌شود
+        $after = $issued->map(fn ($a) => $a->fresh())
+            ->map(fn ($a) => [$a->date->toDateString(), $a->start_time, $a->line_no])
+            ->all();
 
-        $this->assertGreaterThanOrEqual($fresh->reserved_count, $fresh->capacity);
-        $this->assertSame(5, $fresh->reserved_count);
+        $this->assertSame($before, $after);
     }
 
     #[Test]
@@ -199,7 +196,6 @@ final class SettingsAndReportsTest extends TestCase
             $this->factory,
             $this->makeDriver('09123'.str_pad((string) random_int(100000, 999999), 6, '0')),
             $this->makeTruck(str_pad((string) random_int(10, 99), 2, '0'), 'ب', str_pad((string) random_int(100, 999), 3, '0'), '67'),
-            $this->futureSlot($this->factory),
         ));
 
         $checkedIn = now()->subMinutes($waitMinutes + $loadingMinutes);
@@ -251,7 +247,6 @@ final class SettingsAndReportsTest extends TestCase
             $this->factory,
             $this->makeDriver('09129990001'),
             $this->makeTruck('77', 'ج', '777', '67'),
-            $this->futureSlot($this->factory, 1),
         ));
 
         $noShow->forceFill([
@@ -274,7 +269,6 @@ final class SettingsAndReportsTest extends TestCase
             $this->factory,
             $this->makeDriver('09128880001'),
             $this->makeTruck('88', 'د', '888', '67'),
-            $this->futureSlot($this->factory),
         ));
 
         $appointment->forceFill([

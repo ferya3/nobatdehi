@@ -115,37 +115,45 @@ final class QueueService
     }
 
     /**
-     * برنامه‌ی زمانیِ تخمینی یک نوبت — همان چیزی که به راننده اعلام می‌شود.
+     * برنامه‌ی زمانیِ یک نوبت — همان چیزی که به راننده اعلام می‌شود.
      *
      * برخلاف estimatedWaitMinutes() که فقط برای امروز معنی دارد، این برای
-     * نوبت فردا هم کار می‌کند: راننده در لحظه‌ی گرفتن نوبت باید بداند حدوداً
-     * چه ساعتی بارگیری‌اش تمام می‌شود، نه اینکه صبح روز بعد بفهمد.
+     * نوبت فردا هم کار می‌کند: راننده در لحظه‌ی گرفتن نوبت باید بداند چه
+     * ساعتی بارگیری‌اش تمام می‌شود، نه اینکه صبح روز بعد بفهمد.
      *
      * ساعت‌ها روی سرور به «H:i» تبدیل می‌شوند و نه به‌صورت ISO فرستاده
      * می‌شوند: مرورگر راننده ISO را با منطقه‌ی زمانی *خودش* رندر می‌کند و
      * گوشی‌ای که روی UTC مانده، ۰۷:۰۰ را ۰۳:۳۰ نشان می‌دهد.
      *
-     * @return array{loading_minutes:int, queue_minutes:int, starts_at:string, ends_at:string}
+     * @return array{loading_minutes:int, starts_in_minutes:int, starts_at:string, ends_at:string}
      */
     public function plannedSchedule(Appointment $appointment): array
     {
         $appointment->loadMissing(['factory', 'product', 'truck.truckType']);
 
-        $factory = $appointment->factory;
-        $lines = max(1, (int) $factory->loading_lines);
-        $fallback = (int) $factory->avg_loading_minutes;
-
-        $loadingMinutes = $appointment->expectedLoadingMinutes();
-        $queueMinutes = (int) ceil($this->minutesAhead($appointment, $fallback) / $lines);
-
-        $startsAt = $appointment->startsAt()->addMinutes($queueMinutes);
+        // دیگر تخمین نیست: زمان‌بند موقع صدور نوبت، شروع و پایان را روی یک
+        // لاین مشخص نشانده و همان دو عدد در ستون‌های نوبت هستند. جمع‌زدن
+        // مدت کامیون‌های جلوتر، همان حساب را دو بار و با نتیجه‌ی متفاوت
+        // انجام می‌داد.
+        $startsAt = $appointment->startsAt();
+        $endsAt = $this->endsAt($appointment);
 
         return [
-            'loading_minutes' => $loadingMinutes,
-            'queue_minutes' => $queueMinutes,
+            'loading_minutes' => $appointment->expectedLoadingMinutes(),
+            // «چقدر مانده تا نوبت من» — نه «چقدر صف جلوی من است». با
+            // زمان‌بندی سریالی این دو یکی نیستند و اسم قبلی گمراه‌کننده بود.
+            'starts_in_minutes' => (int) max(0, CarbonImmutable::now()->diffInMinutes($startsAt, false)),
             'starts_at' => $startsAt->format('H:i'),
-            'ends_at' => $startsAt->addMinutes($loadingMinutes)->format('H:i'),
+            'ends_at' => $endsAt->format('H:i'),
         ];
+    }
+
+    /** پایان بارگیریِ اعلام‌شده — از ستون خودِ نوبت، نه از تخمین دوباره */
+    private function endsAt(Appointment $appointment): CarbonImmutable
+    {
+        return CarbonImmutable::parse(
+            $appointment->date->format('Y-m-d').' '.substr((string) $appointment->end_time, 0, 5),
+        );
     }
 
     /** میانگین واقعی زمان بارگیری امروز — اگر داده‌ای نبود، null */

@@ -7,27 +7,31 @@ namespace App\Domain\Appointment\Actions;
 use App\Domain\Appointment\Data\NewAppointment;
 use App\Domain\Appointment\Enums\AppointmentStatus;
 use App\Domain\Appointment\Exceptions\BookingException;
-use App\Models\Appointment;
+use App\Domain\Slot\AppointmentScheduler;
 use App\Events\AppointmentCreated;
-use App\Models\AppointmentSlot;
+use App\Models\Appointment;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 
 /**
  * صدور نوبت.
  *
- * تنها جایی که یک ردیف appointments ساخته می‌شود. سه لایه دفاع در برابر
- * تخصیص بیش از ظرفیت دارد:
+ * تنها جایی که یک ردیف appointments ساخته می‌شود. ساعت نوبت اینجا حساب
+ * می‌شود و نه در درخواست: راننده ساعت انتخاب نمی‌کند، سامانه اعلام می‌کند.
  *
- *   ۱. قفل Advisory روی (کارخانه، روز) — تمام نوبت‌گیری‌های آن روز را سریالی می‌کند
- *   ۲. SELECT ... FOR UPDATE روی ردیف اسلات
- *   ۳. CHECK (reserved_count <= capacity) در خود PostgreSQL
+ * دو لایه دفاع در برابر دو کامیون روی یک لاین در یک لحظه:
  *
- * لایه‌ی سوم هیچ‌وقت نباید فعال شود؛ اگر شد یعنی یکی از دو لایه‌ی قبل دور زده
- * شده و بهتر است تراکنش بترکد تا اینکه ظرفیت منفی شود.
+ *   ۱. قفل Advisory روی (کارخانه، روز) — تمام نوبت‌گیری‌های آن روز را سریالی
+ *      می‌کند، پس زمان‌بند همیشه صفِ کامل و تازه را می‌بیند
+ *   ۲. UNIQUE (کارخانه، روز، لاین، ساعت شروع) در خود PostgreSQL
+ *
+ * لایه‌ی دوم هیچ‌وقت نباید فعال شود؛ اگر شد یعنی لایه‌ی اول دور زده شده و
+ * بهتر است تراکنش بترکد تا اینکه دو کامیون هم‌زمان روی یک لاین بنشینند.
  */
 final class CreateAppointment
 {
+    public function __construct(private readonly AppointmentScheduler $scheduler) {}
+
     public function __invoke(NewAppointment $data): Appointment
     {
         // مسیر سریع Idempotency: کلیک دوم و سوم راننده نباید تراکنش باز کند.
@@ -36,32 +40,39 @@ final class CreateAppointment
         }
 
         return DB::transaction(function () use ($data) {
-            $this->lockDay($data->factory->id, $data->slot->date);
+            // قفل روی روزِ *امروز* گرفته می‌شود و نه روزِ نوبت: هنوز نمی‌دانیم
+            // نوبت به کدام روز می‌افتد، و همین را زمان‌بند تعیین می‌کند. قفلِ
+            // امروز کافی است چون هر نوبت‌گیری از امروز شروع به گشتن می‌کند.
+            $this->lockDay($data->factory->id, CarbonImmutable::today());
 
             // دوباره داخل قفل: دو درخواست هم‌زمان با یک کلید، فقط یکی نوبت می‌سازد.
             if ($existing = $this->findByIdempotencyKey($data)) {
                 return $existing;
             }
 
-            $slot = AppointmentSlot::whereKey($data->slot->id)->lockForUpdate()->firstOrFail();
-
-            $this->assertSlotBookable($data, $slot);
             $this->assertActorsAllowed($data);
-            $this->assertLimits($data, $slot);
+            $this->assertProductAvailable($data);
+            $this->assertLimits($data);
+
+            $opening = $this->scheduler->nextOpening($data->factory, $this->loadingMinutes($data));
+
+            if ($opening === null) {
+                throw BookingException::noOpening((int) $data->factory->booking_horizon_days);
+            }
 
             $appointment = Appointment::create([
                 'factory_id' => $data->factory->id,
-                'number' => $this->nextNumber($data->factory->id, $slot->date),
+                'number' => $this->nextNumber($data->factory->id, $opening->date->toDateString()),
                 'driver_id' => $data->driver->id,
                 'truck_id' => $data->truck->id,
                 'product_id' => $data->product->id,
                 // اولویت از محصول snapshot می‌شود، نه اینکه هر بار خوانده شود:
                 // تغییر اولویت یک محصول نباید ترتیب صفِ دیروز را عوض کند.
                 'priority' => (int) $data->product->priority,
-                'slot_id' => $slot->id,
-                'date' => $slot->date,
-                'start_time' => $slot->start_time,
-                'end_time' => $slot->end_time,
+                'date' => $opening->date->toDateString(),
+                'start_time' => $opening->startTime(),
+                'end_time' => $opening->endTime(),
+                'line_no' => $opening->line,
                 'status' => AppointmentStatus::Booked,
                 'idempotency_key' => $data->idempotencyKey,
                 'created_by_user_id' => $data->createdByUserId,
@@ -69,8 +80,6 @@ final class CreateAppointment
                 'user_agent' => $data->userAgent ? mb_substr($data->userAgent, 0, 512) : null,
                 'note' => $data->note,
             ]);
-
-            $slot->increment('reserved_count');
 
             $data->driver->trucks()->syncWithoutDetaching([
                 $data->truck->id => ['last_used_at' => now()],
@@ -104,15 +113,16 @@ final class CreateAppointment
     }
 
     /**
-     * قفل تراکنشی روی یک روز از یک کارخانه.
+     * قفل تراکنشی روی نوبت‌گیریِ یک کارخانه.
      *
-     * با این قفل، شمارش ظرفیت روزانه و تخصیص شماره‌ی نوبت هم امن می‌شوند، نه
-     * فقط ظرفیت یک اسلات. برای ۸۰ کامیون در روز سریالی‌کردن هزینه‌ای ندارد.
+     * با این قفل، زمان‌بند همیشه صفِ کامل را می‌بیند و دو راننده‌ی هم‌زمان
+     * یک ساعت نمی‌گیرند. تخصیص شماره‌ی نوبت هم زیر همین قفل امن می‌شود.
+     * برای ۸۰ کامیون در روز، سریالی‌کردن هزینه‌ای ندارد.
      */
     private function lockDay(int $factoryId, mixed $date): void
     {
         if (DB::connection()->getDriverName() !== 'pgsql') {
-            return; // قفل ردیف اسلات و CHECK دیتابیس همچنان برقرارند
+            return; // یکتاییِ (کارخانه، روز، لاین، ساعت) همچنان برقرار است
         }
 
         $day = (int) floor(CarbonImmutable::parse((string) $date)->getTimestamp() / 86400);
@@ -120,35 +130,25 @@ final class CreateAppointment
         DB::selectOne('SELECT pg_advisory_xact_lock(?::int, ?::int)', [$factoryId, $day]);
     }
 
-    private function assertSlotBookable(NewAppointment $data, AppointmentSlot $slot): void
+    private function assertProductAvailable(NewAppointment $data): void
     {
-        if ($slot->factory_id !== $data->factory->id) {
-            throw BookingException::slotMismatch();
-        }
-
-        if ($slot->is_blocked) {
-            throw BookingException::slotBlocked();
-        }
-
-        if ($slot->reserved_count >= $slot->capacity) {
-            throw BookingException::slotFull();
-        }
-
-        $earliest = CarbonImmutable::now()->addMinutes($data->factory->booking_lead_minutes);
-
-        if ($slot->startsAt()->lessThan($earliest)) {
-            throw BookingException::slotPast();
-        }
-
-        $horizon = CarbonImmutable::today()->addDays($data->factory->booking_horizon_days)->endOfDay();
-
-        if ($slot->startsAt()->greaterThan($horizon)) {
-            throw BookingException::slotOutOfHorizon($data->factory->booking_horizon_days);
-        }
-
         if (! $data->product->is_active || $data->product->factory_id !== $data->factory->id) {
             throw BookingException::productUnavailable();
         }
+    }
+
+    /**
+     * چقدر طول می‌کشد این کامیون بارگیری شود.
+     *
+     * همان زنجیره‌ی Appointment::expectedLoadingMinutes() ولی پیش از ساخته
+     * شدن نوبت: نوع کامیون دقیق‌ترین را می‌داند، بعد محصول، و در آخر میانگین
+     * کارخانه به‌عنوان تور ایمنی.
+     */
+    private function loadingMinutes(NewAppointment $data): int
+    {
+        return $data->truck->truckType?->loading_minutes
+            ?? $data->product->loading_minutes
+            ?? (int) $data->factory->avg_loading_minutes;
     }
 
     private function assertActorsAllowed(NewAppointment $data): void
@@ -162,7 +162,7 @@ final class CreateAppointment
         }
     }
 
-    private function assertLimits(NewAppointment $data, AppointmentSlot $slot): void
+    private function assertLimits(NewAppointment $data): void
     {
         $active = AppointmentStatus::activeValues();
 
@@ -182,14 +182,8 @@ final class CreateAppointment
             throw BookingException::plateLimit($data->factory->max_active_per_plate);
         }
 
-        $dayTotal = Appointment::where('factory_id', $data->factory->id)
-            ->whereDate('date', $slot->date)
-            ->whereIn('status', $active)
-            ->count();
-
-        if ($dayTotal >= $data->factory->daily_capacity) {
-            throw BookingException::dailyCapacityReached();
-        }
+        // سقف روزانه اینجا بررسی نمی‌شود: هنوز معلوم نیست نوبت به کدام روز
+        // می‌افتد. زمان‌بند روزِ پر را رد می‌کند و سراغ روز بعد می‌رود.
     }
 
     /** شماره‌ی نوبت: دنباله‌ی روزانه‌ی هر کارخانه، امن زیر قفل روز */
