@@ -165,9 +165,14 @@ function cancel() {
                 نوبت شما برای {{ appointment.jalali_long }} است. وضعیت صف از صبح همان روز اینجا نمایش داده می‌شود.
             </AlertBox>
 
-            <section v-if="appointment.cancel_reason" class="card p-5">
-                <p class="text-sm text-slate-500">دلیل لغو</p>
-                <p class="mt-1 text-sm font-medium text-slate-800">{{ appointment.cancel_reason }}</p>
+            <section v-if="appointment.cancelled_by_label || appointment.cancel_reason" class="card p-5">
+                <p class="text-sm text-slate-500">وضعیت لغو</p>
+                <p v-if="appointment.cancelled_by_label" class="mt-1 text-sm font-semibold text-rose-700">
+                    {{ appointment.cancelled_by_label }}
+                </p>
+                <p v-if="appointment.cancel_reason" class="mt-1 text-sm font-medium text-slate-800">
+                    {{ appointment.cancel_reason }}
+                </p>
             </section>
 
             <div v-if="canCancel" class="space-y-3">

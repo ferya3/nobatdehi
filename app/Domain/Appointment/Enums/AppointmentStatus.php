@@ -72,6 +72,12 @@ enum AppointmentStatus: string
         return ! $this->isActive();
     }
 
+    /** پایانِ ناموفق: نوبت بسته شد بدون اینکه بارگیری کامل شود. */
+    public function isCancellation(): bool
+    {
+        return in_array($this, [self::Cancelled, self::Rejected, self::NoShow, self::Expired], true);
+    }
+
     /** آیا کامیون فیزیکاً داخل کارخانه است؟ */
     public function isOnSite(): bool
     {

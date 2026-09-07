@@ -55,9 +55,7 @@ final class TransitionAppointment
             $fresh->loading_point_id = $loadingPointId ?? $fresh->loading_point_id;
             $this->stamp($fresh, $to);
 
-            if ($to === AppointmentStatus::Cancelled || $to === AppointmentStatus::Rejected) {
-                $fresh->cancel_reason = $reason;
-            }
+            $this->stampCloser($fresh, $to, $actor, $reason);
 
             $fresh->save();
 
@@ -78,6 +76,35 @@ final class TransitionAppointment
 
             return $fresh;
         });
+    }
+
+    /**
+     * دلیل و عاملِ بسته‌شدن نوبت.
+     *
+     * روی هر بازگشت به وضعیت فعال پاک می‌شود؛ وگرنه نوبتی که اپراتور دوباره
+     * باز کرده، تا ابد «لغو توسط راننده» را در پنل نشان می‌دهد.
+     */
+    private function stampCloser(
+        Appointment $appointment,
+        AppointmentStatus $to,
+        Actor $actor,
+        ?string $reason,
+    ): void {
+        if ($to->isCancellation()) {
+            $appointment->cancel_reason = $reason;
+            $appointment->cancelled_by_type = $actor->type();
+            $appointment->cancelled_by_name = $actor->name();
+
+            return;
+        }
+
+        if ($to->isActive()) {
+            $appointment->cancel_reason = null;
+            $appointment->cancelled_by_type = null;
+            $appointment->cancelled_by_name = null;
+        }
+
+        // COMPLETED: نوبت موفق بسته شده — چیزی برای پاک کردن یا نوشتن نیست.
     }
 
     /** ظرفیت اسلات را با ورود به/خروج از مجموعه‌ی فعال هماهنگ می‌کند. */

@@ -3,6 +3,8 @@
 use App\Http\Controllers\Driver\AppointmentController;
 use App\Http\Controllers\Driver\BookingController;
 use App\Http\Controllers\Driver\OtpController;
+use App\Http\Controllers\Staff\Catalog\ProductController;
+use App\Http\Controllers\Staff\Catalog\TruckTypeController;
 use App\Http\Controllers\Staff\DashboardController;
 use App\Http\Controllers\Staff\GateController;
 use App\Http\Controllers\Staff\HomeController;
@@ -85,6 +87,17 @@ Route::prefix('panel')->name('staff.')->group(function () {
 
         Route::get('/reports', [ReportController::class, 'index'])->name('reports');
         Route::get('/reports/export', [ReportController::class, 'export'])->name('reports.export');
+
+        // کاتالوگ: محصولات و انواع کامیون
+        Route::get('/products', [ProductController::class, 'index'])->name('products.index');
+        Route::post('/products', [ProductController::class, 'store'])->name('products.store');
+        Route::put('/products/{product}', [ProductController::class, 'update'])->name('products.update');
+        Route::delete('/products/{product}', [ProductController::class, 'destroy'])->name('products.destroy');
+
+        Route::get('/truck-types', [TruckTypeController::class, 'index'])->name('truck-types.index');
+        Route::post('/truck-types', [TruckTypeController::class, 'store'])->name('truck-types.store');
+        Route::put('/truck-types/{truckType}', [TruckTypeController::class, 'update'])->name('truck-types.update');
+        Route::delete('/truck-types/{truckType}', [TruckTypeController::class, 'destroy'])->name('truck-types.destroy');
 
         Route::get('/settings', [SettingsController::class, 'edit'])->name('settings.edit');
         Route::put('/settings', [SettingsController::class, 'update'])->name('settings.update');

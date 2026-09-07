@@ -92,7 +92,8 @@ class AppointmentController extends Controller
                 $appointment,
                 AppointmentStatus::Cancelled,
                 Actor::driver($this->driver($request), $request->ip()),
-                'لغو توسط راننده',
+                // دلیل خالی است: هویت لغوکننده را خود Actor حمل می‌کند و پنل
+                // آن را به‌صورت «لغو توسط راننده» نشان می‌دهد.
             );
         } catch (InvalidStateTransition $e) {
             return back()->with('error', $e->getMessage());

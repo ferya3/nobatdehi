@@ -53,6 +53,7 @@ final class SettingsAndReportsTest extends TestCase
             'daily_capacity' => 60,
             'loading_lines' => 2,
             'avg_loading_minutes' => 30,
+            'no_show_grace_minutes' => 45,
             'booking_horizon_days' => 5,
             'booking_lead_minutes' => 90,
             'max_active_per_mobile' => 3,

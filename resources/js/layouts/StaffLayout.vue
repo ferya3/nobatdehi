@@ -19,6 +19,8 @@ const nav = computed(() =>
         { label: 'نگهبانی', name: 'staff.gate.index', pattern: 'staff.gate.*', permission: 'queue.checkin' },
         { label: 'داشبورد', name: 'staff.dashboard', pattern: 'staff.dashboard', permission: 'dashboard.view' },
         { label: 'گزارش‌ها', name: 'staff.reports', pattern: 'staff.reports', permission: 'reports.view' },
+        { label: 'محصولات', name: 'staff.products.index', pattern: 'staff.products.*', permission: 'products.manage' },
+        { label: 'انواع کامیون', name: 'staff.truck-types.index', pattern: 'staff.truck-types.*', permission: 'products.manage' },
         { label: 'تنظیمات', name: 'staff.settings.edit', pattern: 'staff.settings.edit', permission: 'settings.manage' },
         { label: 'پیامک', name: 'staff.settings.sms', pattern: 'staff.settings.sms*', permission: 'settings.manage' },
     ]

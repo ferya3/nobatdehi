@@ -20,7 +20,7 @@ final class AppointmentStateMachine
      * @var array<string, array<int, string>>
      */
     private const FORWARD = [
-        'BOOKED' => ['WAITING', 'CHECKED_IN', 'CANCELLED', 'REJECTED', 'EXPIRED'],
+        'BOOKED' => ['WAITING', 'CHECKED_IN', 'CANCELLED', 'NO_SHOW', 'REJECTED', 'EXPIRED'],
         'WAITING' => ['CALLED', 'CHECKED_IN', 'CANCELLED', 'NO_SHOW', 'EXPIRED'],
         'CALLED' => ['CHECKED_IN', 'CANCELLED', 'NO_SHOW'],
         'CHECKED_IN' => ['LOADING', 'CANCELLED'],
@@ -45,7 +45,7 @@ final class AppointmentStateMachine
         'LOADING' => ['CHECKED_IN'],
         'LOADED' => ['LOADING'],
         'COMPLETED' => ['LOADED'],
-        'NO_SHOW' => ['WAITING'],
+        'NO_SHOW' => ['BOOKED', 'WAITING'],
         'CANCELLED' => ['BOOKED', 'WAITING'],
     ];
 

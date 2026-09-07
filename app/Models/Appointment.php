@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Domain\Appointment\Data\Actor;
 use App\Domain\Appointment\Enums\AppointmentStatus;
 use App\Support\Digits;
 use Carbon\CarbonImmutable;
@@ -137,6 +138,53 @@ class Appointment extends Model
     public function timeRange(): string
     {
         return substr((string) $this->start_time, 0, 5);
+    }
+
+    /**
+     * برچسب فارسیِ «چه کسی نوبت را بست» — همان چیزی که در پنل دیده می‌شود.
+     * برای نوبت‌های باز یا تکمیل‌شده null است.
+     */
+    public function cancelledByLabel(): ?string
+    {
+        if (! $this->status->isCancellation()) {
+            return null;
+        }
+
+        $verb = $this->status === AppointmentStatus::NoShow ? 'ثبت عدم حضور' : 'لغو';
+
+        return match ($this->cancelled_by_type) {
+            Actor::TYPE_DRIVER => $verb.' توسط راننده',
+            Actor::TYPE_STAFF => $verb.' توسط '.($this->cancelled_by_name ?: 'اپراتور'),
+            Actor::TYPE_SYSTEM => $verb.' توسط سامانه',
+            // نوبت‌های قبل از افزوده‌شدن این ستون‌ها
+            default => null,
+        };
+    }
+
+    /**
+     * مدت مورد انتظار بارگیری این نوبت (دقیقه).
+     *
+     * ترتیب اولویت عمدی است: نوع کامیون دقیق‌ترین اطلاعات را دارد، بعد
+     * محصول، و در آخر میانگین کارخانه به‌عنوان تور ایمنی.
+     */
+    public function expectedLoadingMinutes(): int
+    {
+        return $this->truck?->truckType?->loading_minutes
+            ?? $this->product?->loading_minutes
+            ?? (int) $this->factory->avg_loading_minutes;
+    }
+
+    /** مهلت حضور بعد از شروع ساعت نوبت (دقیقه) */
+    public function graceMinutes(): int
+    {
+        return $this->truck?->truckType?->grace_minutes
+            ?? (int) $this->factory->no_show_grace_minutes;
+    }
+
+    /** لحظه‌ای که بعد از آن، نیامدن راننده «عدم حضور» محسوب می‌شود */
+    public function noShowDueAt(): CarbonImmutable
+    {
+        return $this->startsAt()->addMinutes($this->graceMinutes());
     }
 
     /** مدت انتظار: از ورود تا شروع بارگیری (دقیقه) */

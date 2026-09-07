@@ -25,6 +25,7 @@ class FactorySeeder extends Seeder
                 'daily_capacity' => 80,
                 'loading_lines' => 3,
                 'avg_loading_minutes' => 25,
+                'no_show_grace_minutes' => 60,
                 'booking_horizon_days' => 7,
                 'booking_lead_minutes' => 60,
                 'max_active_per_mobile' => 2,
@@ -46,12 +47,14 @@ class FactorySeeder extends Seeder
             );
         }
 
+        // زمان‌ها نقطه‌ی شروع‌اند و از پنل «انواع کامیون» تغییر می‌کنند:
+        // هرچه کامیون بزرگ‌تر، بارگیری طولانی‌تر و مهلت حضور سخاوتمندانه‌تر.
         $truckTypes = [
-            ['code' => 'tak', 'name' => 'تک', 'capacity_tons' => 10, 'sort_order' => 1],
-            ['code' => 'joft', 'name' => 'جفت', 'capacity_tons' => 18, 'sort_order' => 2],
-            ['code' => 'teriler', 'name' => 'تریلی', 'capacity_tons' => 30, 'sort_order' => 3],
-            ['code' => 'khavar', 'name' => 'خاور', 'capacity_tons' => 6, 'sort_order' => 4],
-            ['code' => 'kamion', 'name' => 'کامیون', 'capacity_tons' => 22, 'sort_order' => 5],
+            ['code' => 'tak', 'name' => 'تک', 'capacity_tons' => 10, 'loading_minutes' => 20, 'grace_minutes' => 45, 'sort_order' => 1],
+            ['code' => 'joft', 'name' => 'جفت', 'capacity_tons' => 18, 'loading_minutes' => 25, 'grace_minutes' => 60, 'sort_order' => 2],
+            ['code' => 'teriler', 'name' => 'تریلی', 'capacity_tons' => 30, 'loading_minutes' => 40, 'grace_minutes' => 90, 'sort_order' => 3],
+            ['code' => 'khavar', 'name' => 'خاور', 'capacity_tons' => 6, 'loading_minutes' => 15, 'grace_minutes' => 45, 'sort_order' => 4],
+            ['code' => 'kamion', 'name' => 'کامیون', 'capacity_tons' => 22, 'loading_minutes' => 30, 'grace_minutes' => 60, 'sort_order' => 5],
         ];
 
         foreach ($truckTypes as $type) {

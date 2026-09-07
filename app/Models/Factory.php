@@ -21,6 +21,7 @@ class Factory extends Model
             'daily_capacity' => 'integer',
             'loading_lines' => 'integer',
             'avg_loading_minutes' => 'integer',
+            'no_show_grace_minutes' => 'integer',
             'booking_horizon_days' => 'integer',
             'booking_lead_minutes' => 'integer',
             'max_active_per_mobile' => 'integer',

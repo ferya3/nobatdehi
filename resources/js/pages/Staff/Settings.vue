@@ -30,6 +30,7 @@ const form = useForm({
     daily_capacity: Number(props.factory.daily_capacity),
     loading_lines: Number(props.factory.loading_lines),
     avg_loading_minutes: Number(props.factory.avg_loading_minutes),
+    no_show_grace_minutes: Number(props.factory.no_show_grace_minutes),
     booking_horizon_days: Number(props.factory.booking_horizon_days),
     booking_lead_minutes: Number(props.factory.booking_lead_minutes),
     max_active_per_mobile: Number(props.factory.max_active_per_mobile),
@@ -42,6 +43,7 @@ type NumericField =
     | 'daily_capacity'
     | 'loading_lines'
     | 'avg_loading_minutes'
+    | 'no_show_grace_minutes'
     | 'booking_horizon_days'
     | 'booking_lead_minutes'
     | 'max_active_per_mobile'
@@ -52,6 +54,11 @@ const NUMBERS: { key: NumericField; label: string; hint?: string }[] = [
     { key: 'daily_capacity', label: 'حداکثر نوبت روزانه' },
     { key: 'loading_lines', label: 'تعداد لاین بارگیری' },
     { key: 'avg_loading_minutes', label: 'زمان متوسط بارگیری (دقیقه)', hint: 'وقتی داده‌ی واقعی نباشد برای تخمین استفاده می‌شود' },
+    {
+        key: 'no_show_grace_minutes',
+        label: 'مهلت پیش‌فرض حضور (دقیقه)',
+        hint: 'بعد از ساعت نوبت؛ انواع کامیون می‌توانند مهلت اختصاصی داشته باشند',
+    },
     { key: 'booking_horizon_days', label: 'افق نوبت‌دهی (روز)', hint: 'راننده تا چند روز آینده می‌تواند نوبت بگیرد' },
     { key: 'booking_lead_minutes', label: 'حداقل فاصله تا نوبت (دقیقه)' },
     { key: 'max_active_per_mobile', label: 'حداکثر نوبت فعال هر موبایل' },

@@ -335,6 +335,9 @@ watch(connected, (isLive) => {
                                 </td>
                                 <td class="px-4 py-3">
                                     <StatusBadge :tone="row.status_tone" :label="row.status_label" size="sm" />
+                                    <p v-if="row.cancelled_by_label" class="mt-1 text-xs font-medium text-rose-600">
+                                        {{ row.cancelled_by_label }}
+                                    </p>
                                     <p v-if="row.loading_point" class="mt-1 text-xs text-slate-400">
                                         {{ row.loading_point }}
                                     </p>

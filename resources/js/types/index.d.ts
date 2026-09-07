@@ -76,6 +76,8 @@ export interface Appointment {
     loading_started_at: string | null;
     completed_at: string | null;
     cancel_reason: string | null;
+    cancelled_by: 'driver' | 'staff' | 'system' | null;
+    cancelled_by_label: string | null;
     created_at: string | null;
     is_today?: boolean;
     ahead?: number | null;

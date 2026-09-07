@@ -54,6 +54,44 @@ trait SeedsFactory
             ->firstOrFail();
     }
 
+    /**
+     * زمان را روی صبحِ اولین روزِ کاری قفل می‌کند.
+     *
+     * بدون این، تستِ «اسلات امروز» شب‌ها یا جمعه‌ها می‌افتاد — نه به‌خاطر باگ،
+     * که چون آن ساعت اصلاً اسلاتی وجود ندارد.
+     */
+    protected function freezeOnWorkingMorning(Factory $factory): CarbonImmutable
+    {
+        $date = CarbonImmutable::today();
+
+        while ((new SlotGenerator())->planFor($factory, $date) === null) {
+            $date = $date->addDay();
+        }
+
+        $moment = $date->setTime(7, 0);
+
+        $this->travelTo($moment);
+
+        return $moment;
+    }
+
+    /** اسلاتی از «امروز» که هنوز به فاصله‌ی مجاز رزرو نرسیده است */
+    protected function todaySlot(Factory $factory, int $index = 0): AppointmentSlot
+    {
+        $today = CarbonImmutable::today();
+
+        (new SlotGenerator())->generateForDate($factory, $today);
+
+        $earliest = CarbonImmutable::now()->addMinutes((int) $factory->booking_lead_minutes);
+
+        return AppointmentSlot::where('factory_id', $factory->id)
+            ->whereDate('date', $today->toDateString())
+            ->where('start_time', '>', $earliest->format('H:i:s'))
+            ->orderBy('start_time')
+            ->skip($index)
+            ->firstOrFail();
+    }
+
     protected function booking(
         Factory $factory,
         Driver $driver,

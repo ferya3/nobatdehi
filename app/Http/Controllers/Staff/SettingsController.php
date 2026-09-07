@@ -32,7 +32,7 @@ class SettingsController extends Controller
 
         return Inertia::render('Staff/Settings', [
             'factory' => $factory->only([
-                'name', 'slot_minutes', 'daily_capacity', 'loading_lines', 'avg_loading_minutes',
+                'name', 'slot_minutes', 'daily_capacity', 'loading_lines', 'avg_loading_minutes', 'no_show_grace_minutes',
                 'booking_horizon_days', 'booking_lead_minutes', 'max_active_per_mobile', 'max_active_per_plate',
             ]),
             'workingHours' => $this->workingHours($factory),
@@ -46,7 +46,7 @@ class SettingsController extends Controller
 
         $before = array_merge(
             $factory->only([
-                'slot_minutes', 'daily_capacity', 'loading_lines', 'avg_loading_minutes',
+                'slot_minutes', 'daily_capacity', 'loading_lines', 'avg_loading_minutes', 'no_show_grace_minutes',
                 'booking_horizon_days', 'booking_lead_minutes', 'max_active_per_mobile', 'max_active_per_plate',
             ]),
             ['working_hours' => $this->workingHours($factory)],

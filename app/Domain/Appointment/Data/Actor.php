@@ -13,6 +13,12 @@ use App\Models\User;
  */
 final class Actor
 {
+    public const TYPE_DRIVER = 'driver';
+
+    public const TYPE_STAFF = 'staff';
+
+    public const TYPE_SYSTEM = 'system';
+
     private function __construct(
         public readonly ?User $user = null,
         public readonly ?Driver $driver = null,
@@ -43,5 +49,15 @@ final class Actor
     public function name(): string
     {
         return $this->user?->name ?? $this->driver?->displayName() ?? $this->label ?? 'سامانه';
+    }
+
+    /** نوع عامل — مبنای برچسب «لغو توسط ...» در پنل */
+    public function type(): string
+    {
+        return match (true) {
+            $this->driver !== null => self::TYPE_DRIVER,
+            $this->user !== null => self::TYPE_STAFF,
+            default => self::TYPE_SYSTEM,
+        };
     }
 }

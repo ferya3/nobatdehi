@@ -8,6 +8,7 @@ use App\Domain\Appointment\Enums\AppointmentStatus;
 use App\Models\Appointment;
 use App\Models\Factory;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 
 /**
@@ -29,6 +30,15 @@ final class QueueService
             return null;
         }
 
+        return $this->aheadQuery($appointment)->count();
+    }
+
+    /**
+     * همان مجموعه‌ی «جلوتر»ها — ستون‌ها عمداً کامل نوشته شده‌اند چون
+     * minutesAhead() روی همین کوئری join می‌زند.
+     */
+    private function aheadQuery(Appointment $appointment): Builder
+    {
         $stillWaiting = [
             AppointmentStatus::Booked->value,
             AppointmentStatus::Waiting->value,
@@ -37,18 +47,38 @@ final class QueueService
             AppointmentStatus::Loading->value,
         ];
 
-        return Appointment::where('factory_id', $appointment->factory_id)
-            ->whereDate('date', $appointment->date)
-            ->whereIn('status', $stillWaiting)
+        return Appointment::where('appointments.factory_id', $appointment->factory_id)
+            ->whereDate('appointments.date', $appointment->date)
+            ->whereIn('appointments.status', $stillWaiting)
             ->whereKeyNot($appointment->id)
             ->where(function ($query) use ($appointment) {
-                $query->where('start_time', '<', $appointment->start_time)
+                $query->where('appointments.start_time', '<', $appointment->start_time)
                     ->orWhere(function ($q) use ($appointment) {
-                        $q->where('start_time', $appointment->start_time)
-                            ->where('number', '<', $appointment->number);
+                        $q->where('appointments.start_time', $appointment->start_time)
+                            ->where('appointments.number', '<', $appointment->number);
                     });
-            })
-            ->count();
+            });
+    }
+
+    /**
+     * مجموع مدت بارگیریِ مورد انتظارِ کامیون‌های جلوتر.
+     *
+     * COALESCE همان زنجیره‌ی Appointment::expectedLoadingMinutes() است، فقط
+     * در SQL: یک تریلی و یک خاور نباید در تخمین صف یک وزن داشته باشند.
+     */
+    private function minutesAhead(Appointment $appointment, int $fallback): int
+    {
+        $minutes = $this->aheadQuery($appointment)
+            ->join('trucks', 'trucks.id', '=', 'appointments.truck_id')
+            ->leftJoin('truck_types', 'truck_types.id', '=', 'trucks.truck_type_id')
+            ->join('products', 'products.id', '=', 'appointments.product_id')
+            ->selectRaw(
+                'coalesce(sum(coalesce(truck_types.loading_minutes, products.loading_minutes, ?)), 0) as minutes',
+                [$fallback],
+            )
+            ->value('minutes');
+
+        return (int) round((float) $minutes);
     }
 
     /**
@@ -71,9 +101,12 @@ final class QueueService
 
         $factory = $appointment->factory;
         $lines = max(1, (int) $factory->loading_lines);
-        $perTruck = $this->averageLoadingMinutes($factory) ?? (int) $factory->avg_loading_minutes;
 
-        $queueMinutes = (int) ceil(($ahead * $perTruck) / $lines);
+        // میانگین واقعیِ امروز فقط جایی به کار می‌آید که نه نوع کامیون و نه
+        // محصول، مدت بارگیری تعریف‌شده نداشته باشند.
+        $fallback = $this->averageLoadingMinutes($factory) ?? (int) $factory->avg_loading_minutes;
+
+        $queueMinutes = (int) ceil($this->minutesAhead($appointment, $fallback) / $lines);
 
         // اگر ساعت نوبت هنوز نرسیده، انتظار حداقل تا شروع اسلات است
         $untilSlot = (int) max(0, CarbonImmutable::now()->diffInMinutes($appointment->startsAt(), false));

@@ -56,6 +56,8 @@ class AppointmentResource extends JsonResource
             'loading_started_at' => $this->loading_started_at?->toIso8601String(),
             'completed_at' => $this->completed_at?->toIso8601String(),
             'cancel_reason' => $this->cancel_reason,
+            'cancelled_by' => $this->cancelled_by_type,
+            'cancelled_by_label' => $this->cancelledByLabel(),
             'created_at' => $this->created_at?->toIso8601String(),
         ];
     }

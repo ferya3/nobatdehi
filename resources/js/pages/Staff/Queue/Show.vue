@@ -88,6 +88,10 @@ defineProps<{
                                 {{ duration(appointment.loading_minutes) }}
                             </dd>
                         </div>
+                        <div v-if="appointment.cancelled_by_label" class="sm:col-span-2">
+                            <dt class="text-xs text-slate-500">لغوکننده</dt>
+                            <dd class="mt-0.5 text-sm font-semibold text-rose-700">{{ appointment.cancelled_by_label }}</dd>
+                        </div>
                         <div v-if="appointment.cancel_reason" class="sm:col-span-2">
                             <dt class="text-xs text-slate-500">دلیل لغو</dt>
                             <dd class="mt-0.5 text-sm font-medium text-rose-700">{{ appointment.cancel_reason }}</dd>
