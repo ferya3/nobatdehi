@@ -3,6 +3,7 @@ import AlertBox from '@/components/AlertBox.vue';
 import AppButton from '@/components/AppButton.vue';
 import FormField from '@/components/FormField.vue';
 import PlateBadge from '@/components/PlateBadge.vue';
+import BarcodeListener from '@/components/BarcodeListener.vue';
 import QrScanner from '@/components/QrScanner.vue';
 import StatusBadge from '@/components/StatusBadge.vue';
 import StaffLayout from '@/layouts/StaffLayout.vue';
@@ -32,6 +33,7 @@ type Found = Appointment & {
 const props = defineProps<{
     loadingPoints: { id: number; name: string }[];
     inProgress: Busy[];
+    barcodeEnabled: boolean;
     result?: { error: string | null; appointment: Found | null };
 }>();
 
@@ -47,8 +49,22 @@ const form = useForm({ to: '', loading_point_id: null as number | null });
 
 const lateCount = computed(() => props.inProgress.filter((row) => row.is_late).length);
 
+const scanning = ref(false);
+
+/**
+ * دوربین و بارکدخوان یک مسیر دارند.
+ *
+ * برخلاف گیت، این ایستگاه ورود ثبت نمی‌کند و جایی برای نگه‌داشتنِ «منبع
+ * اسکن» ندارد؛ پس فرستادنش فقط یک پارامتر بی‌مصرف بود.
+ */
 function onDetected(token: string) {
-    router.post(route('staff.loading.scan'), { token }, { preserveScroll: true });
+    scanning.value = true;
+
+    router.post(
+        route('staff.loading.scan'),
+        { token },
+        { preserveScroll: true, onFinish: () => (scanning.value = false) },
+    );
 }
 
 function act(to: 'LOADING' | 'LOADED') {
@@ -153,7 +169,13 @@ function reset() {
                 </div>
             </section>
 
-            <section v-else class="card space-y-3 p-5">
+            <!-- بارکدخوان: بدون کلیک، همیشه گوش می‌دهد -->
+            <section v-if="!found && barcodeEnabled" class="card space-y-3 p-5">
+                <h2 class="text-sm font-semibold text-slate-700">بارکدخوان</h2>
+                <BarcodeListener :busy="scanning" @scanned="onDetected" />
+            </section>
+
+            <section v-if="!found" class="card space-y-3 p-5">
                 <h2 class="text-sm font-semibold text-slate-700">اسکن QR حواله</h2>
                 <p class="text-xs text-slate-500">
                     بدون اسکن حواله، بارگیری شروع نمی‌شود.

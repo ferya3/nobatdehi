@@ -3,6 +3,7 @@ import AlertBox from '@/components/AlertBox.vue';
 import AppButton from '@/components/AppButton.vue';
 import FormField from '@/components/FormField.vue';
 import PlateBadge from '@/components/PlateBadge.vue';
+import BarcodeListener from '@/components/BarcodeListener.vue';
 import QrScanner from '@/components/QrScanner.vue';
 import StatusBadge from '@/components/StatusBadge.vue';
 import TextInput from '@/components/TextInput.vue';
@@ -34,6 +35,7 @@ const props = defineProps<{
     requireStable: boolean;
     scales: ScaleLive[];
     pending: { tare: number; gross: number };
+    barcodeEnabled: boolean;
     result?: { error: string | null; appointment: Found | null };
 }>();
 
@@ -170,8 +172,22 @@ const previewOverload = computed(
     () => previewNet.value !== null && found.value?.capacity_kg !== null && previewNet.value > (found.value?.capacity_kg ?? Infinity),
 );
 
+const scanning = ref(false);
+
+/**
+ * دوربین و بارکدخوان یک مسیر دارند.
+ *
+ * برخلاف گیت، این ایستگاه ورود ثبت نمی‌کند و جایی برای نگه‌داشتنِ «منبع
+ * اسکن» ندارد؛ پس فرستادنش فقط یک پارامتر بی‌مصرف بود.
+ */
 function onDetected(token: string) {
-    router.post(route('staff.weighbridge.scan'), { token }, { preserveScroll: true });
+    scanning.value = true;
+
+    router.post(
+        route('staff.weighbridge.scan'),
+        { token },
+        { preserveScroll: true, onFinish: () => (scanning.value = false) },
+    );
 }
 
 function submit() {
@@ -421,7 +437,13 @@ function reset() {
                 </div>
             </section>
 
-            <section v-else class="card space-y-3 p-5">
+            <!-- بارکدخوان: بدون کلیک، همیشه گوش می‌دهد -->
+            <section v-if="!found && barcodeEnabled" class="card space-y-3 p-5">
+                <h2 class="text-sm font-semibold text-slate-700">بارکدخوان</h2>
+                <BarcodeListener :busy="scanning" @scanned="onDetected" />
+            </section>
+
+            <section v-if="!found" class="card space-y-3 p-5">
                 <h2 class="text-sm font-semibold text-slate-700">اسکن QR حواله</h2>
                 <p class="text-xs text-slate-500">
                     همان کدی که راننده در گیت نشان داد. سامانه خودش تشخیص می‌دهد نوبت کدام باسکول است.

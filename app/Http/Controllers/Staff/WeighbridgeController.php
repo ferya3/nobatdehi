@@ -9,6 +9,7 @@ use App\Domain\Appointment\Enums\AppointmentStatus;
 use App\Domain\Appointment\Support\QrToken;
 use App\Domain\Audit\AuditLogger;
 use App\Domain\Audit\SecurityLogger;
+use App\Domain\Gate\GateDevices;
 use App\Domain\Weighbridge\ExitPermit;
 use App\Domain\Weighbridge\ScaleDevices;
 use App\Domain\Weighbridge\WeighingService;
@@ -43,6 +44,7 @@ class WeighbridgeController extends Controller
         private readonly AuditLogger $audit,
         private readonly SecurityLogger $security,
         private readonly ScaleDevices $scales,
+        private readonly GateDevices $gateDevices,
     ) {}
 
     public function index(Request $request): Response
@@ -351,6 +353,8 @@ class WeighbridgeController extends Controller
         return Inertia::render('Staff/Weighbridge/Index', [
             'factoryId' => $this->factory($request)->id,
             'scaleEnabled' => $this->scales->enabled(),
+            // همان بارکدخوانی که در گیت هست، اینجا هم کار می‌کند
+            'barcodeEnabled' => $this->gateDevices->barcodeEnabled(),
             'requireStable' => $this->scales->requireStable(),
             'scales' => $this->liveScales($request),
             'pending' => $this->pendingCounts($request),
