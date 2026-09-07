@@ -233,6 +233,32 @@ final class SmsManagerTest extends TestCase
         });
     }
 
+    /**
+     * رگرسیون: post() از bodyFormat پیش‌فرض (json) استفاده می‌کند، پس بدنه‌ی
+     * رشته‌ای را JSON-encode می‌کرد و پنل «"to=..."» با گیومه می‌گرفت.
+     */
+    #[Test]
+    public function a_custom_post_panel_gets_a_clean_form_body(): void
+    {
+        Http::fake(['*' => Http::response('OK', 200)]);
+
+        $this->sms->send($this->settings([
+            'sms_provider' => 'custom',
+            'sms_custom_method' => 'POST',
+            'sms_custom_url' => 'https://panel.example.com/send?to={to}&text={text}',
+        ]), '09123456789', 'سلام');
+
+        Http::assertSent(function ($request) {
+            $body = $request->body();
+
+            $this->assertStringNotContainsString('"', $body);
+            parse_str($body, $fields);
+
+            return $fields === ['to' => '09123456789', 'text' => 'سلام']
+                && $request->header('Content-Type') === ['application/x-www-form-urlencoded'];
+        });
+    }
+
     #[Test]
     public function it_refuses_to_call_an_internal_address(): void
     {

@@ -74,6 +74,19 @@ class SafeHttp
         if (array_key_exists('form', $options)) {
             return $req->asForm()->post($url, $options['form']);
         }
-        return $req->post($url, $options['body'] ?? []);
+
+        $body = $options['body'] ?? [];
+
+        // بدنه‌ی رشته‌ای باید عیناً برود. post() از bodyFormat پیش‌فرض (json)
+        // استفاده می‌کند و رشته را JSON-encode می‌کند، پس یک بدنه‌ی
+        // «to=1&b=2» به «"to=1&b=2"» تبدیل می‌شد — با گیومه — در حالی که
+        // هدر Content-Type می‌گفت form-urlencoded.
+        if (is_string($body)) {
+            $type = $options['headers']['Content-Type'] ?? 'application/x-www-form-urlencoded';
+
+            return $req->withBody($body, $type)->post($url);
+        }
+
+        return $req->post($url, $body);
     }
 }
