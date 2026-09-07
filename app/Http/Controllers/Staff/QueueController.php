@@ -133,6 +133,7 @@ class QueueController extends Controller
         $appointment->load([
             'driver', 'truck.truckType', 'product', 'loadingPoint',
             'transitions.user', 'transitions.driver', 'loadingRecord',
+            'gatePlateReading',
         ]);
 
         return Inertia::render('Staff/Queue/Show', [

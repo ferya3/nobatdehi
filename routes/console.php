@@ -13,3 +13,6 @@ Schedule::command('appointments:no-show')->everyFiveMinutes()->withoutOverlappin
 
 // کامیونی که روی لاین مانده، تا کسی خبردار نشود همان‌جا می‌ماند
 Schedule::command('loading:alert-delays')->everyTenMinutes()->withoutOverlapping();
+
+// عکس‌های دوربین پلاک‌خوان جمع می‌شوند تا دیسک پر شود — مگر کسی پاکشان کند
+Schedule::command('plate-readings:prune')->dailyAt('03:30')->withoutOverlapping();

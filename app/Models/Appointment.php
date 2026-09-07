@@ -98,6 +98,18 @@ class Appointment extends Model
         return $this->hasOne(LoadingRecord::class);
     }
 
+    /** خواندنی که راهبند را باز کرد — عکسِ همان لحظه‌ی ورود */
+    public function gatePlateReading(): BelongsTo
+    {
+        return $this->belongsTo(PlateReading::class, 'gate_plate_reading_id');
+    }
+
+    /** همه‌ی خواندن‌های دوربین که به این نوبت گره خورده‌اند */
+    public function plateReadings(): HasMany
+    {
+        return $this->hasMany(PlateReading::class)->orderBy('captured_at');
+    }
+
     // ---------------------------------------------------------------- Scope
 
     public function scopeActive(Builder $query): Builder

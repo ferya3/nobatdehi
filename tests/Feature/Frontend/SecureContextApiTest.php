@@ -26,7 +26,12 @@ final class SecureContextApiTest extends TestCase
     public function test_page_code_never_calls_secure_context_only_apis_directly(): void
     {
         $root = resource_path('js');
-        $allowed = [resource_path('js/lib/uuid.ts')];
+        // تنها جاهایی که اجازه دارند مستقیم سراغ این APIها بروند: خودِ
+        // پوشش‌دهنده‌هایشان، که همان‌جا هم feature check و جایگزین دارند.
+        $allowed = [
+            resource_path('js/lib/uuid.ts'),
+            resource_path('js/lib/clipboard.ts'),
+        ];
 
         $offenders = [];
 

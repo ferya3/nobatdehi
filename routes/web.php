@@ -7,6 +7,7 @@ use App\Http\Controllers\Staff\Catalog\ProductController;
 use App\Http\Controllers\Staff\Catalog\TruckTypeController;
 use App\Http\Controllers\Staff\DashboardController;
 use App\Http\Controllers\Staff\GateController;
+use App\Http\Controllers\Staff\GateDeviceController;
 use App\Http\Controllers\Staff\HomeController;
 use App\Http\Controllers\Staff\LoadingController;
 use App\Http\Controllers\Staff\LoginController;
@@ -82,6 +83,14 @@ Route::prefix('panel')->name('staff.')->group(function () {
         Route::post('/gate/lookup', [GateController::class, 'lookup'])->name('gate.lookup');
         Route::post('/gate/{appointment}/check-in', [GateController::class, 'checkIn'])->name('gate.check-in');
 
+        // دستگاه‌های گیت: عکس پلاک از ایستگاه، و خواندن‌های دوربین پلاک‌خوان
+        Route::post('/gate/capture', [GateController::class, 'capture'])
+            ->middleware('throttle:gate-capture')
+            ->name('gate.capture');
+        Route::get('/gate/readings', [GateController::class, 'readings'])->name('gate.readings');
+        Route::get('/gate/readings/{reading}/image', [GateController::class, 'readingImage'])
+            ->name('gate.reading-image');
+
         // لاین بارگیری
         Route::get('/loading', [LoadingController::class, 'index'])->name('loading.index');
         Route::post('/loading/scan', [LoadingController::class, 'scan'])->name('loading.scan');
@@ -117,6 +126,11 @@ Route::prefix('panel')->name('staff.')->group(function () {
 
         Route::get('/settings', [SettingsController::class, 'edit'])->name('settings.edit');
         Route::put('/settings', [SettingsController::class, 'update'])->name('settings.update');
+
+        Route::get('/settings/devices', [GateDeviceController::class, 'edit'])->name('settings.devices');
+        Route::put('/settings/devices', [GateDeviceController::class, 'update'])->name('settings.devices.update');
+        Route::post('/settings/devices/token', [GateDeviceController::class, 'rotateToken'])
+            ->name('settings.devices.token');
 
         Route::get('/settings/sms', [SmsSettingsController::class, 'edit'])->name('settings.sms');
         Route::put('/settings/sms', [SmsSettingsController::class, 'update'])->name('settings.sms.update');

@@ -36,8 +36,15 @@ class GateCheckInRequest extends FormRequest
             // و نظر نگهبان دیگر تعیین‌کننده نیست.
             'observed_plate' => ['nullable', 'string', 'max:32'],
 
-            // وقتی پلاک‌خوان نیست، تأیید چشمیِ نگهبان جای آن را می‌گیرد
-            'plate_match' => ['required_without:observed_plate', 'boolean'],
+            // شناسه‌ی عکسی که دوربین گرفته. سرور خودش پلاکش را می‌خواند؛
+            // مرورگر فقط می‌گوید «این خواندن» و نه «مطابق است».
+            'plate_reading_id' => ['nullable', 'integer', 'exists:plate_readings,id'],
+
+            // وقتی هیچ دستگاهی حرف نزده، تأیید چشمیِ نگهبان جای آن را می‌گیرد
+            'plate_match' => [
+                'required_without_all:observed_plate,plate_reading_id',
+                'boolean',
+            ],
 
             'override_reason' => ['nullable', 'string', 'min:8', 'max:255'],
         ];
@@ -46,7 +53,7 @@ class GateCheckInRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'plate_match.required_without' => 'تطبیق پلاک را تأیید یا رد کنید.',
+            'plate_match.required_without_all' => 'تطبیق پلاک را تأیید یا رد کنید.',
             'override_reason.min' => 'دلیل ثبت دستی را کامل بنویسید.',
         ];
     }

@@ -45,6 +45,22 @@ export interface PlateParts {
     full: string;
 }
 
+/** یک خواندنِ پلاک — از دوربین پلاک‌خوان شبکه‌ای یا دوربین ایستگاه */
+export interface PlateReading {
+    id: number;
+    source: 'anpr' | 'station';
+    source_label: string;
+    plate_key: string | null;
+    raw_plate: string | null;
+    confidence: number | null;
+    lane: string | null;
+    /** دستگاه توانست پلاک را بخواند؟ اگر نه، تطبیق با نگهبان است */
+    recognised: boolean;
+    image_url: string | null;
+    captured_at: string | null;
+    clock: string | null;
+}
+
 export type StatusTone =
     | 'booked'
     | 'waiting'
@@ -89,6 +105,17 @@ export interface Appointment {
         queue_minutes: number;
         starts_at: string;
         ends_at: string;
+    } | null;
+    gate?: {
+        entry_method: string | null;
+        entry_method_label: string | null;
+        scan_source: string | null;
+        scan_source_label: string | null;
+        observed_plate: string | null;
+        plate_source: string | null;
+        plate_source_label: string | null;
+        override_reason: string | null;
+        reading: PlateReading | null;
     } | null;
 }
 

@@ -99,6 +99,79 @@ defineProps<{
                     </dl>
                 </section>
 
+                <!-- «چطور وارد شد» — همان چیزی که در بازبینیِ یک حادثه پرسیده می‌شود -->
+                <section v-if="appointment.gate" class="card space-y-4 p-5 lg:col-span-2">
+                    <h2 class="text-sm font-semibold text-slate-700">ورود از گیت</h2>
+
+                    <dl class="grid gap-4 sm:grid-cols-2">
+                        <div>
+                            <dt class="text-xs text-slate-500">روش تأیید حواله</dt>
+                            <dd
+                                class="mt-0.5 text-sm font-medium"
+                                :class="appointment.gate.entry_method === 'manual' ? 'text-amber-700' : 'text-slate-800'"
+                            >
+                                {{ appointment.gate.entry_method_label ?? '—' }}
+                            </dd>
+                        </div>
+                        <div>
+                            <dt class="text-xs text-slate-500">دستگاه اسکن</dt>
+                            <dd class="mt-0.5 text-sm font-medium text-slate-800">
+                                {{ appointment.gate.scan_source_label ?? '—' }}
+                            </dd>
+                        </div>
+                        <div>
+                            <dt class="text-xs text-slate-500">تأییدکننده پلاک</dt>
+                            <dd class="mt-0.5 text-sm font-medium text-slate-800">
+                                {{ appointment.gate.plate_source_label ?? '—' }}
+                            </dd>
+                        </div>
+                        <div>
+                            <dt class="text-xs text-slate-500">پلاک ثبت‌شده</dt>
+                            <dd class="num mt-0.5 text-sm font-medium text-slate-800">
+                                {{ appointment.gate.observed_plate ?? '—' }}
+                            </dd>
+                        </div>
+                        <div v-if="appointment.gate.override_reason" class="sm:col-span-2">
+                            <dt class="text-xs text-slate-500">دلیل ثبت دستی</dt>
+                            <dd class="mt-0.5 text-sm font-medium text-amber-700">
+                                {{ appointment.gate.override_reason }}
+                            </dd>
+                        </div>
+                    </dl>
+
+                    <!-- عکسِ لحظه‌ی ورود -->
+                    <div
+                        v-if="appointment.gate.reading"
+                        class="flex items-start gap-4 rounded-xl border border-slate-200 bg-slate-50 p-4"
+                    >
+                        <a
+                            v-if="appointment.gate.reading.image_url"
+                            :href="appointment.gate.reading.image_url"
+                            target="_blank"
+                            class="shrink-0"
+                        >
+                            <img
+                                :src="appointment.gate.reading.image_url"
+                                alt="عکس پلاک هنگام ورود"
+                                class="size-24 rounded-lg border border-slate-200 object-cover"
+                            />
+                        </a>
+                        <div class="min-w-0 flex-1 text-sm">
+                            <p class="font-medium text-slate-800">{{ appointment.gate.reading.source_label }}</p>
+                            <p class="num mt-1 text-slate-700">
+                                {{ appointment.gate.reading.plate_key ?? 'پلاک خوانده نشد' }}
+                                <span v-if="appointment.gate.reading.confidence !== null" class="text-xs text-slate-500">
+                                    (اطمینان {{ appointment.gate.reading.confidence }}٪)
+                                </span>
+                            </p>
+                            <p class="num mt-1 text-xs text-slate-500">
+                                {{ appointment.gate.reading.clock }}
+                                <span v-if="appointment.gate.reading.lane"> — {{ appointment.gate.reading.lane }}</span>
+                            </p>
+                        </div>
+                    </div>
+                </section>
+
                 <section class="card p-5">
                     <h2 class="text-sm font-semibold text-slate-700">تاریخچه وضعیت</h2>
 

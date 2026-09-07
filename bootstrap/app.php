@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\HandleInertiaRequests;
+use App\Http\Middleware\VerifyGateDeviceToken;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -22,6 +23,9 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
 
         $middleware->trustProxies(at: '*');
+
+        // دوربین پلاک‌خوان کاربر نیست و session ندارد؛ توکن دستگاه دارد
+        $middleware->alias(['gate.device' => VerifyGateDeviceToken::class]);
 
         // دو دروازه‌ی ورود جدا: راننده و کارکنان
         $middleware->redirectGuestsTo(fn (Request $request) => $request->is('panel*')

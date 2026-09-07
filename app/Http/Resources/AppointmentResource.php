@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Http\Resources;
 
+use App\Domain\Gate\GateEntry;
 use App\Models\Appointment;
+use App\Models\PlateReading;
 use App\Support\Jalali;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -58,10 +60,53 @@ class AppointmentResource extends JsonResource
             'priority' => (int) $this->priority,
             'priority_reason' => $this->priority_reason,
 
+            // «چطور وارد شد» — فقط وقتی واقعاً واردی در کار بوده
+            'gate' => $this->when($this->checked_in_at !== null, fn () => [
+                'entry_method' => $this->gate_entry_method,
+                'entry_method_label' => GateEntry::methodLabel($this->gate_entry_method),
+                'scan_source' => $this->gate_scan_source,
+                'scan_source_label' => GateEntry::scanSourceLabel($this->gate_scan_source),
+                'observed_plate' => $this->gate_observed_plate,
+                'plate_source' => $this->gate_plate_source,
+                'plate_source_label' => GateEntry::plateSourceLabel($this->gate_plate_source),
+                'override_reason' => $this->gate_override_reason,
+                'reading' => $this->whenLoaded(
+                    'gatePlateReading',
+                    fn () => $this->gatePlateReading ? self::reading($this->gatePlateReading) : null,
+                ),
+            ]),
+
             'cancel_reason' => $this->cancel_reason,
             'cancelled_by' => $this->cancelled_by_type,
             'cancelled_by_label' => $this->cancelledByLabel(),
             'created_at' => $this->created_at?->toIso8601String(),
+        ];
+    }
+
+    /**
+     * خواندنِ پلاک، همان شکلی که صفحه‌ی نگهبانی هم می‌بیند.
+     *
+     * آدرس عکس از مسیرِ دارای دسترسی می‌آید و نه لینک مستقیمِ دیسک — عکسِ
+     * پلاک داده‌ی نظارتی است و نباید با دانستن آدرس برای همه باز باشد.
+     *
+     * @return array<string, mixed>
+     */
+    public static function reading(PlateReading $reading): array
+    {
+        return [
+            'id' => $reading->id,
+            'source' => $reading->source,
+            'source_label' => $reading->sourceLabel(),
+            'plate_key' => $reading->plate_key,
+            'raw_plate' => $reading->raw_plate,
+            'confidence' => $reading->confidence,
+            'lane' => $reading->lane,
+            'recognised' => ! $reading->isUnreadable(),
+            'image_url' => $reading->image_path !== null
+                ? route('staff.gate.reading-image', $reading)
+                : null,
+            'captured_at' => $reading->captured_at?->toIso8601String(),
+            'clock' => $reading->captured_at?->format('H:i:s'),
         ];
     }
 }

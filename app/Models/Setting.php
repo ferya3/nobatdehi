@@ -33,7 +33,7 @@ class Setting extends Model
     private const CACHE_KEY = 'settings.all';
 
     /** کلیدهایی که رمزنگاری‌شده ذخیره می‌شوند */
-    public const SECRET_KEYS = ['sms_password', 'sms_api_key'];
+    public const SECRET_KEYS = ['sms_password', 'sms_api_key', 'gate_anpr_token'];
 
     public const DEFAULTS = [
         'sms_enabled' => '1',
@@ -49,6 +49,14 @@ class Setting extends Model
 
         // شماره‌هایی که پیام «نوبت جدید» را می‌گیرند — با کاما جدا
         'sms_manager_recipients' => '',
+
+        // دستگاه‌های گیت: بارکدخوان، دوربین ایستگاه، دوربین پلاک‌خوان شبکه‌ای
+        'gate_barcode_enabled' => '1',
+        'gate_station_camera_enabled' => '1',
+        'gate_anpr_enabled' => '0',
+        'gate_anpr_token' => '',
+        'gate_anpr_min_confidence' => '70',
+        'gate_reading_retention_days' => '30',
     ];
 
     /** همه‌ی تنظیمات (پیش‌فرض + ذخیره‌شده) با رمزگشایی اسرار */

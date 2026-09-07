@@ -21,26 +21,57 @@ final class ScanTicket
 
     private const PREFIX = 'gate.scan.';
 
-    public static function issue(Request $request, Appointment $appointment): void
+    /** با دوربینِ مرورگر خوانده شد */
+    public const SOURCE_CAMERA = 'camera';
+
+    /** با بارکدخوانِ سخت‌افزاری خوانده شد */
+    public const SOURCE_BARCODE = 'barcode';
+
+    /**
+     * بلیط، خودِ دستگاهِ اسکن را هم با خودش می‌برد.
+     *
+     * وگرنه در سابقه فقط می‌ماند «با QR وارد شد» و معلوم نیست بارکدخوانِ
+     * گیت خوانده یا کسی با دوربینِ گوشی‌اش عکسِ QR را اسکن کرده — که دو
+     * چیز کاملاً متفاوت‌اند وقتی بعداً دنبال یک ورودِ مشکوک می‌گردیم.
+     */
+    public static function issue(Request $request, Appointment $appointment, string $source = self::SOURCE_CAMERA): void
     {
-        $request->session()->put(self::PREFIX.$appointment->ulid, now()->timestamp);
+        $request->session()->put(self::PREFIX.$appointment->ulid, [
+            'at' => now()->timestamp,
+            'source' => $source,
+        ]);
     }
 
     public static function isValid(Request $request, Appointment $appointment): bool
     {
-        $at = $request->session()->get(self::PREFIX.$appointment->ulid);
+        return self::read($request, $appointment) !== null;
+    }
 
-        if (! is_int($at)) {
-            return false;
+    /** دستگاهی که این نوبت را اسکن کرد، یا null اگر بلیطی نیست */
+    public static function source(Request $request, Appointment $appointment): ?string
+    {
+        return self::read($request, $appointment)['source'] ?? null;
+    }
+
+    /** @return array{at: int, source: string}|null */
+    private static function read(Request $request, Appointment $appointment): ?array
+    {
+        $ticket = $request->session()->get(self::PREFIX.$appointment->ulid);
+
+        if (! is_array($ticket) || ! is_int($ticket['at'] ?? null)) {
+            return null;
         }
 
-        if (now()->timestamp - $at > self::TTL_SECONDS) {
+        if (now()->timestamp - $ticket['at'] > self::TTL_SECONDS) {
             self::consume($request, $appointment);
 
-            return false;
+            return null;
         }
 
-        return true;
+        return [
+            'at' => $ticket['at'],
+            'source' => is_string($ticket['source'] ?? null) ? $ticket['source'] : self::SOURCE_CAMERA,
+        ];
     }
 
     public static function consume(Request $request, Appointment $appointment): void

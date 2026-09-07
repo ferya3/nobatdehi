@@ -12,19 +12,28 @@ use App\Domain\Appointment\Exceptions\InvalidStateTransition;
 use App\Domain\Appointment\Exceptions\TransitionBlocked;
 use App\Domain\Appointment\Support\QrToken;
 use App\Domain\Audit\SecurityLogger;
+use App\Domain\Gate\GateDevices;
+use App\Domain\Gate\GateEntry;
+use App\Domain\Gate\PlateCapture;
+use App\Domain\Gate\PlateVerdict;
+use App\Domain\Gate\PlateVerifier;
 use App\Domain\Gate\ScanTicket;
-use App\Domain\Truck\PlateNumber;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Staff\CapturePlateRequest;
 use App\Http\Requests\Staff\GateCheckInRequest;
 use App\Http\Requests\Staff\PlateLookupRequest;
 use App\Http\Resources\AppointmentResource;
 use App\Models\Appointment;
 use App\Models\Factory;
+use App\Models\PlateReading;
 use Carbon\CarbonImmutable;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * صفحه‌ی نگهبانی: اعتبارسنجی حواله و ثبت ورود.
@@ -39,22 +48,24 @@ use Inertia\Response;
  */
 class GateController extends Controller
 {
-    private const ENTRY_QR = 'qr';
+    /** با چه چیزی QR خوانده شد */
+    private const SCAN_SOURCES = ['camera', 'barcode'];
 
-    private const ENTRY_MANUAL = 'manual';
+    /** چند خواندنِ اخیرِ دوربین به صفحه داده می‌شود */
+    private const RECENT_READINGS = 5;
 
-    public function __construct(private readonly SecurityLogger $security) {}
+    public function __construct(
+        private readonly SecurityLogger $security,
+        private readonly PlateVerifier $plates,
+        private readonly PlateCapture $capture,
+        private readonly GateDevices $devices,
+    ) {}
 
     public function index(Request $request): Response
     {
         $this->authorizeGate($request);
 
-        return Inertia::render('Staff/Gate/Index', [
-            'onSiteCount' => Appointment::where('factory_id', $this->factory($request)->id)
-                ->whereDate('date', CarbonImmutable::today()->toDateString())
-                ->onSite()
-                ->count(),
-        ]);
+        return $this->result($request, null);
     }
 
     /** اعتبارسنجی توکن QR */
@@ -86,7 +97,7 @@ class GateController extends Controller
             return $this->result($request, $appointment, 'این کد دیگر معتبر نیست. راننده باید کد را از برنامه دوباره باز کند.');
         }
 
-        ScanTicket::issue($request, $appointment);
+        ScanTicket::issue($request, $appointment, $this->scanSource($request));
 
         return $this->result($request, $appointment, scanned: true);
     }
@@ -161,11 +172,26 @@ class GateController extends Controller
             }
         }
 
-        $plateCheck = $this->verifyPlate($request, $appointment);
+        $verdict = $this->plates->verify(
+            $appointment,
+            $this->readingFor($request, $appointment),
+            $request->string('observed_plate')->trim()->toString() ?: null,
+            $request->boolean('plate_match'),
+        );
 
-        if ($plateCheck !== null) {
-            return back()->with('error', $plateCheck);
+        if (! $verdict->passed) {
+            $this->security->log(
+                SecurityLogger::GATE_PLATE_MISMATCH,
+                $appointment->ulid,
+                $appointment,
+                $verdict->context(),
+                $request,
+            );
+
+            return back()->with('error', $verdict->message);
         }
+
+        $scanSource = ScanTicket::source($request, $appointment);
 
         try {
             $transition(
@@ -179,11 +205,20 @@ class GateController extends Controller
 
         $appointment->forceFill([
             'qr_used_at' => now(),
-            'gate_entry_method' => $scanned ? self::ENTRY_QR : self::ENTRY_MANUAL,
-            'gate_observed_plate' => $appointment->truck?->plate_key,
+            'gate_entry_method' => $scanned ? GateEntry::QR : GateEntry::MANUAL,
+            'gate_scan_source' => $scanned ? $scanSource : null,
+            // پلاکی که واقعاً دیده شد، نه پلاکی که در حواله نوشته بود. وقتی
+            // دستگاه خوانده، این دو یکی‌اند؛ ارزشش وقتی معلوم می‌شود که
+            // نباشند — و آن‌وقت اصلاً به اینجا نمی‌رسیم.
+            'gate_observed_plate' => $verdict->observed ?? $appointment->truck?->plate_key,
+            'gate_plate_source' => $verdict->source,
+            'gate_plate_reading_id' => $verdict->reading?->id,
             'gate_override_reason' => $scanned ? null : $reason,
             'gate_override_by_user_id' => $scanned ? null : $request->user()->id,
         ])->save();
+
+        // خواندنِ دوربین به همین نوبت گره می‌خورد تا عکس در سابقه پیدا شود
+        $verdict->reading?->forceFill(['appointment_id' => $appointment->id])->save();
 
         ScanTicket::consume($request, $appointment);
 
@@ -193,47 +228,122 @@ class GateController extends Controller
     }
 
     /**
-     * تطبیق پلاک. اگر خطایی برگردد، ورود ثبت نمی‌شود.
+     * ثبت عکس پلاک از ایستگاه نگهبانی.
      *
-     * وقتی پلاک‌خوان مقدار فرستاده باشد، خودِ سرور مقایسه می‌کند و تأیید
-     * چشمیِ نگهبان اصلاً خوانده نمی‌شود — دستگاه تبانی نمی‌کند.
+     * جدا از ثبت ورود است و عمداً: عکس باید بماند حتی وقتی راهبند باز
+     * نمی‌شود. کامیونی که برگردانده شده، دقیقاً همانی است که بعداً کسی
+     * می‌پرسد «مگر نیامده بود؟».
      */
-    private function verifyPlate(GateCheckInRequest $request, Appointment $appointment): ?string
+    public function capture(CapturePlateRequest $request): JsonResponse
     {
-        $expected = $appointment->truck?->plate_key;
-        $observed = $request->string('observed_plate')->trim()->toString();
+        $factory = $this->factory($request);
 
-        if ($observed !== '') {
-            $normalised = PlateNumber::normalizeKey($observed);
+        $reading = $this->capture->record(
+            factory: $factory,
+            source: PlateReading::SOURCE_STATION,
+            rawPlate: $request->string('plate')->trim()->toString() ?: null,
+            image: $request->file('image'),
+            capturedBy: $request->user(),
+        );
 
-            if ($normalised === $expected) {
-                return null;
-            }
+        // عکسی که هنگام بررسی یک نوبت گرفته شده، همان‌جا گره می‌خورد — حتی
+        // اگر راهبند باز نشود. کامیونی که برگردانده شده دقیقاً همانی است که
+        // بعداً کسی می‌پرسد «مگر نیامده بود؟»، و پلاکِ مغایر همان چیزی است
+        // که حراست می‌خواهد ببیند.
+        $ulid = $request->string('appointment')->toString();
 
-            $this->security->log(
-                SecurityLogger::GATE_PLATE_MISMATCH,
-                $appointment->ulid,
-                $appointment,
-                ['expected' => $expected, 'observed' => $normalised ?? $observed, 'source' => 'device'],
-                $request,
-            );
+        if ($ulid !== '') {
+            $appointment = Appointment::where('ulid', $ulid)
+                ->where('factory_id', $factory->id)
+                ->first();
 
-            return 'پلاک خوانده‌شده با پلاک حواله یکی نیست. راهبند باز نمی‌شود؛ موضوع به حراست گزارش شد.';
+            $reading->forceFill(['appointment_id' => $appointment?->id])->save();
         }
 
-        if ($request->boolean('plate_match')) {
+        return response()->json(AppointmentResource::reading($reading));
+    }
+
+    /**
+     * تازه‌ترین خواندن‌های دوربین.
+     *
+     * WebSocket راه اصلی است، ولی ایستگاه نگهبانی جایی است که وای‌فای
+     * ضعیف است و صفحه ساعت‌ها باز می‌ماند. این مسیر همان پشتیبانِ polling
+     * است که وقتی اتصال زنده قطع شود، دوربین را بی‌مصرف نمی‌گذارد.
+     */
+    public function readings(Request $request): JsonResponse
+    {
+        $this->authorizeGate($request);
+
+        return response()->json([
+            'readings' => $this->recentReadings($request),
+        ]);
+    }
+
+    /**
+     * عکس پلاک.
+     *
+     * روی دیسک خصوصی است و از این مسیر سرو می‌شود، نه با لینک مستقیم:
+     * عکسِ هر خودرویی که از جلوی دوربین رد شده، داده‌ی نظارتی است و نباید
+     * با دانستنِ آدرس، برای همه قابل دیدن باشد.
+     */
+    public function readingImage(Request $request, PlateReading $reading): StreamedResponse
+    {
+        abort_unless(
+            $request->user()?->can(Permissions::QUEUE_CHECKIN)
+                || $request->user()?->can(Permissions::APPOINTMENTS_VIEW),
+            403,
+        );
+
+        abort_unless($reading->factory_id === $this->factory($request)->id, 404);
+        abort_if($reading->image_path === null, 404);
+
+        $disk = Storage::disk($reading->image_disk ?? PlateCapture::DISK);
+
+        abort_unless($disk->exists($reading->image_path), 404);
+
+        return $disk->response($reading->image_path);
+    }
+
+    /**
+     * خواندنی که مرورگر به آن اشاره کرده.
+     *
+     * مرورگر فقط شناسه می‌فرستد و هرگز «مطابق است». تطبیق را سرور از روی
+     * همان ردیف انجام می‌دهد، وگرنه کافی بود کسی در درخواست بنویسد پلاک
+     * تأیید شده و کل زنجیره‌ی دوربین تبدیل شود به یک فیلد قابل تایپ.
+     */
+    private function readingFor(GateCheckInRequest $request, Appointment $appointment): ?PlateReading
+    {
+        $id = $request->integer('plate_reading_id');
+
+        if ($id <= 0) {
             return null;
         }
 
-        $this->security->log(
-            SecurityLogger::GATE_PLATE_MISMATCH,
-            $appointment->ulid,
-            $appointment,
-            ['expected' => $expected, 'observed' => null, 'source' => 'guard'],
-            $request,
-        );
+        return PlateReading::find($id);
+    }
 
-        return 'مغایرت پلاک ثبت شد و ورود انجام نشد.';
+    private function scanSource(Request $request): string
+    {
+        $source = $request->string('source')->toString();
+
+        return in_array($source, self::SCAN_SOURCES, true) ? $source : ScanTicket::SOURCE_CAMERA;
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    private function recentReadings(Request $request): array
+    {
+        if (! $this->devices->anprEnabled()) {
+            return [];
+        }
+
+        return PlateReading::where('factory_id', $this->factory($request)->id)
+            ->where('source', PlateReading::SOURCE_ANPR)
+            ->fresh()
+            ->latest('captured_at')
+            ->limit(self::RECENT_READINGS)
+            ->get()
+            ->map(fn (PlateReading $reading) => AppointmentResource::reading($reading))
+            ->all();
     }
 
     private function result(
@@ -244,12 +354,21 @@ class GateController extends Controller
     ): Response {
         $appointment?->load(['driver', 'truck.truckType', 'product']);
 
+        $factory = $this->factory($request);
+
         return Inertia::render('Staff/Gate/Index', [
-            'onSiteCount' => Appointment::where('factory_id', $this->factory($request)->id)
+            'factoryId' => $factory->id,
+            'onSiteCount' => Appointment::where('factory_id', $factory->id)
                 ->whereDate('date', CarbonImmutable::today()->toDateString())
                 ->onSite()
                 ->count(),
-            'result' => [
+            'devices' => [
+                'barcode' => $this->devices->barcodeEnabled(),
+                'station_camera' => $this->devices->stationCameraEnabled(),
+                'anpr' => $this->devices->anprEnabled(),
+            ],
+            'readings' => $this->recentReadings($request),
+            'result' => $appointment === null && $error === null ? null : [
                 'error' => $error,
                 'appointment' => $appointment
                     ? array_merge((new AppointmentResource($appointment))->resolve($request), [

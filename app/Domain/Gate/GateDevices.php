@@ -1,0 +1,98 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Domain\Gate;
+
+use App\Models\Setting;
+use Illuminate\Support\Str;
+
+/**
+ * تنظیمات دستگاه‌های گیت.
+ *
+ * مثل تنظیمات پیامک در دیتابیس است و نه در .env: عوض‌کردن توکن دوربین یا
+ * خاموش‌کردن بارکدخوان نباید به SSH و ری‌استارت سرویس نیاز داشته باشد. توکن
+ * هم مثل رمز پنل پیامک رمزنگاری‌شده ذخیره می‌شود.
+ */
+final class GateDevices
+{
+    public const TOKEN_SETTING = 'gate_anpr_token';
+
+    /** سقف حجم عکسِ دوربین — دستگاهِ خراب تا پرشدن دیسک می‌فرستد */
+    private const MAX_IMAGE_KB = 4096;
+
+    public function anprEnabled(): bool
+    {
+        return Setting::get('gate_anpr_enabled', '0') === '1';
+    }
+
+    public function barcodeEnabled(): bool
+    {
+        return Setting::get('gate_barcode_enabled', '1') === '1';
+    }
+
+    public function stationCameraEnabled(): bool
+    {
+        return Setting::get('gate_station_camera_enabled', '1') === '1';
+    }
+
+    /**
+     * پلاکِ خوانده‌شده با اطمینانِ کمتر از این، تصمیم‌گیر نیست.
+     *
+     * زیر آستانه یعنی «دوربین مطمئن نیست» و نه «پلاک غلط است» — آنجا حرفِ
+     * آخر را نگهبان می‌زند. اگر خواندنِ نامطمئن را مثل خواندنِ قطعی حساب
+     * کنیم، اولین باران کل گیت را قفل می‌کند.
+     */
+    public function minConfidence(): int
+    {
+        return max(0, min(100, (int) Setting::get('gate_anpr_min_confidence', '70')));
+    }
+
+    /** چند روز عکس و خواندن نگه داشته شود */
+    public function retentionDays(): int
+    {
+        return max(1, (int) Setting::get('gate_reading_retention_days', '30'));
+    }
+
+    public function maxImageBytes(): int
+    {
+        return self::MAX_IMAGE_KB * 1024;
+    }
+
+    public function token(): string
+    {
+        return Setting::get(self::TOKEN_SETTING);
+    }
+
+    public function hasToken(): bool
+    {
+        return $this->token() !== '';
+    }
+
+    /**
+     * مقایسه‌ی توکن دستگاه.
+     *
+     * hash_equals و نه === : مقایسه‌ی معمولی رشته به‌محض اولین بایتِ متفاوت
+     * برمی‌گردد و همان اختلاف زمان، حدس‌زدن توکن را ممکن می‌کند.
+     */
+    public function tokenMatches(?string $candidate): bool
+    {
+        $token = $this->token();
+
+        if ($token === '' || $candidate === null || $candidate === '') {
+            return false;
+        }
+
+        return hash_equals($token, $candidate);
+    }
+
+    /** توکن تازه می‌سازد و ذخیره می‌کند — مقدارِ خام فقط همین یک بار برمی‌گردد */
+    public function rotateToken(): string
+    {
+        $token = Str::random(48);
+
+        Setting::putMany([self::TOKEN_SETTING => $token]);
+
+        return $token;
+    }
+}

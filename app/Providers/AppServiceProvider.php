@@ -49,5 +49,21 @@ class AppServiceProvider extends ServiceProvider
         ]);
 
         RateLimiter::for('api', fn (Request $request) => Limit::perMinute(60)->by($request->ip()));
+
+        /*
+         * دوربین پلاک‌خوان: سخاوتمند، ولی نه بی‌سقف.
+         *
+         * یک گیتِ شلوغ در دقیقه چند خواندن دارد، نه چند صد تا. سقف اینجا
+         * برای مهار دوربینی است که خراب شده و در حلقه افتاده — چیزی که تا
+         * پرشدن دیسک هیچ‌کس متوجهش نمی‌شود.
+         */
+        RateLimiter::for('gate-anpr', fn (Request $request) => [
+            Limit::perMinute(120)->by($request->ip()),
+        ]);
+
+        // ثبت عکس از ایستگاه نگهبانی — یک نگهبان با دست این‌قدر عکس نمی‌گیرد
+        RateLimiter::for('gate-capture', fn (Request $request) => [
+            Limit::perMinute(60)->by('user:'.($request->user()?->id ?? $request->ip())),
+        ]);
     }
 }
