@@ -475,7 +475,27 @@ as_app "npm run build --silent"
 
 step "اجرای مهاجرت‌ها و داده‌های پایه"
 as_app "$PHP_BIN artisan migrate --force --no-interaction"
-as_app "$PHP_BIN artisan db:seed --force --no-interaction"
+
+# رمزهای اولیه تصادفی‌اند و seeder فقط یک بار چاپشان می‌کند. آن خروجی وسط
+# صدها خط دیگر گم می‌شود و بعد راهی برای ورود به پنل نمی‌ماند — پس همان‌جا
+# در فایلی که فقط root می‌خواندش نگه داشته می‌شود.
+CREDENTIALS_FILE="/etc/nobatdehi/initial_passwords"
+
+as_app "$PHP_BIN artisan db:seed --force --no-interaction" | tee /tmp/nobatdehi-seed.$$
+
+if grep -qE '@example\.test[[:space:]]+\S' /tmp/nobatdehi-seed.$$; then
+    {
+        echo "# رمزهای اولیه‌ی پنل — ساخته‌شده در $(date -Is)"
+        echo "# بعد از اولین ورود و تغییر رمز، این فایل را پاک کنید."
+        grep -E '@example\.test[[:space:]]+\S' /tmp/nobatdehi-seed.$$ | sed 's/^[[:space:]]*//'
+    } > "$CREDENTIALS_FILE"
+
+    chmod 600 "$CREDENTIALS_FILE"
+    ok "رمزهای اولیه در $CREDENTIALS_FILE ذخیره شد."
+fi
+
+rm -f /tmp/nobatdehi-seed.$$
+
 as_app "$PHP_BIN artisan slots:generate"
 
 if [[ "$SEED_DEMO" == "yes" ]]; then
@@ -766,14 +786,21 @@ ${BOLD}${GREEN}نصب تمام شد.${RESET}
   آدرس راننده     ${APP_URL}/queue
   آدرس کارکنان    ${APP_URL}/panel
 
-  ${BOLD}کاربران پیش‌فرض${RESET} — رمز همه: password
+  ${BOLD}کاربران پیش‌فرض${RESET}
   admin@example.test      مدیر ارشد سامانه
   manager@example.test    مدیر کارخانه
   operator@example.test   اپراتور
   gate@example.test       نگهبانی
   ceo@example.test        مدیرعامل
 
-  ${YELLOW}رمز این کاربران را همین امروز عوض کنید.${RESET}
+  رمز هر کدام هنگام نصب به‌طور تصادفی ساخته شد:
+  ${BOLD}sudo cat ${CREDENTIALS_FILE:-/etc/nobatdehi/initial_passwords}${RESET}
+
+  در اولین ورود، تغییر رمز اجباری است. بعد از آن آن فایل را پاک کنید:
+  sudo rm ${CREDENTIALS_FILE:-/etc/nobatdehi/initial_passwords}
+
+  ${YELLOW}اگر رمزی گم شد، از روی سرور رمز تازه بسازید:${RESET}
+  sudo -u ${APP_USER} ${PHP_BIN} ${APP_DIR}/artisan user:password admin@example.test
 
   ${BOLD}قدم‌های بعدی${RESET}
   1) پنل پیامکی را از خودِ سامانه تنظیم کنید:

@@ -121,7 +121,16 @@ npm run dev                    # Vite
 
 ### کاربران نمونه
 
-رمز همه: `password`
+رمز هر کاربر هنگام `db:seed` به‌طور تصادفی ساخته و **فقط همان یک بار** چاپ
+می‌شود. روی سرور، `install.sh` آن را در `/etc/nobatdehi/initial_passwords`
+(فقط برای root خواندنی) نگه می‌دارد.
+
+اگر رمزی گم شد، رمز تازه بسازید:
+
+```bash
+php artisan user:password                       # فهرست کاربران
+php artisan user:password admin@example.test    # رمز تصادفی تازه
+```
 
 | نقش | ایمیل |
 |---|---|
@@ -132,6 +141,8 @@ npm run dev                    # Vite
 | باسکول | scale@example.test |
 | انبار | warehouse@example.test |
 | مدیرعامل | ceo@example.test |
+
+در اولین ورود، تغییر رمز اجباری است.
 
 راننده رمز ندارد؛ در محیط توسعه با `OTP_EXPOSE_IN_RESPONSE=true` کد ورود
 روی صفحه نمایش داده می‌شود.
