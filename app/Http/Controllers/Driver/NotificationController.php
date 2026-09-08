@@ -30,6 +30,8 @@ class NotificationController extends Controller
     {
         $driver = $request->user('driver');
 
+        $driver->forceFill(['app_last_seen_at' => now()])->saveQuietly();
+
         $pending = DriverNotification::where('driver_id', $driver->id)
             ->whereNull('delivered_at')
             ->orderBy('id')

@@ -7,7 +7,7 @@ namespace App\Events;
 use App\Models\DriverNotification;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PrivateChannel;
-use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
+use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
@@ -18,8 +18,13 @@ use Illuminate\Queue\SerializesModels;
  * رویداد را در همان ثانیه می‌گیرد. سر زدنِ دوره‌ای هم سرِ جایش می‌ماند:
  * گوشی‌های ارزان و مدیرهای باتریِ سخت‌گیر، سرویس را می‌کشند و آن‌وقت
  * تنها چیزی که باقی می‌ماند همان سر زدن است.
+ *
+ * ShouldBroadcastNow و نه ShouldBroadcast — به همان دلیلی که QueueChanged
+ * دارد: با ShouldBroadcast خودِ انتشار یک job در صف می‌شود و اعلانِ «فوری»
+ * به بالا بودنِ Horizon گره می‌خورد. اگر worker خوابیده باشد، هیچ خبری
+ * پخش نمی‌شود و هیچ‌کس هم نمی‌فهمد چرا.
  */
-class DriverNotificationSent implements ShouldBroadcast
+class DriverNotificationSent implements ShouldBroadcastNow
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 

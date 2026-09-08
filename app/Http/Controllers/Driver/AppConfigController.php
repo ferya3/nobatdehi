@@ -4,9 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Driver;
 
-use App\Domain\Appointment\Enums\AppointmentStatus;
 use App\Http\Controllers\Controller;
-use App\Models\Appointment;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -24,22 +22,23 @@ class AppConfigController extends Controller
     {
         $driver = $request->user('driver');
 
-        $active = Appointment::where('driver_id', $driver->id)
-            ->whereIn('status', AppointmentStatus::activeValues())
-            ->exists();
+        // «برنامه هست و حرف می‌زند» — تنها راهِ فهمیدنِ اینکه اعلانِ نرسیده
+        // تقصیرِ سرور است یا گوشی
+        $driver->forceFill(['app_last_seen_at' => now()])->saveQuietly();
 
         return response()->json([
             'driver' => ['id' => $driver->id],
             'csrf' => $request->session()->token(),
 
             /*
-             * اتصال دائم فقط وقتی می‌ارزد که راننده نوبتِ فعال داشته باشد.
+             * اتصال همیشه برقرار است، چه راننده نوبت داشته باشد چه نه.
              *
-             * یک WebSocketِ همیشه‌روشن روی گوشیِ راننده‌ای که این هفته کاری
-             * با کارخانه ندارد، فقط باتری می‌سوزاند — و برنامه‌ای که باتری
-             * می‌سوزاند پاک می‌شود.
+             * اول این را به داشتنِ نوبتِ فعال گره زده بودم تا باتری نسوزد.
+             * غلط بود: اطلاعیه‌ی کارخانه («فردا تعطیل است») دقیقاً به دستِ
+             * کسی باید برسد که هنوز نوبت نگرفته — همان کسی که آن دروازه
+             * کنارش می‌گذاشت.
              */
-            'realtime' => $active,
+            'realtime' => true,
 
             'reverb' => [
                 'key' => (string) config('broadcasting.connections.reverb.key'),

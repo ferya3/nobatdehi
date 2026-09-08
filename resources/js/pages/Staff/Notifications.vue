@@ -29,6 +29,7 @@ const props = defineProps<{
     audiences: AudienceOption[];
     reach: Record<string, number>;
     sent: SentRow[];
+    apps: { installed: number; today: number; last: string | null };
 }>();
 
 const page = usePage<PageProps>();
@@ -69,10 +70,22 @@ function fa(n: number): string {
             <AlertBox v-if="flash.success" tone="success">{{ flash.success }}</AlertBox>
             <AlertBox v-if="flash.warning" tone="warning">{{ flash.warning }}</AlertBox>
 
-            <AlertBox tone="info">
-                اعلان روی برنامه‌ی اندروید راننده نشان داده می‌شود و رایگان است، ولی
-                <strong>فوری نیست</strong> — برنامه هر حدود ۱۵ دقیقه یک بار سر می‌زند.
-                خبرِ فوری («نوبت شما فرا رسید») همچنان با پیامک می‌رود.
+            <!--
+                بدون این جعبه، «چرا اعلان نرسید؟» جوابی ندارد: معلوم نیست
+                سرور چیزی نساخته یا هیچ گوشی‌ای سراغش نیامده.
+            -->
+            <AlertBox :tone="apps.installed === 0 ? 'warning' : 'info'">
+                <template v-if="apps.installed === 0">
+                    <strong>هیچ راننده‌ای هنوز برنامه را باز نکرده.</strong>
+                    اعلان فقط روی برنامه‌ی اندروید دیده می‌شود — تا راننده نصبش نکند و
+                    یک بار واردش نشود، اعلانی به دستش نمی‌رسد. پیامک جای خودش هست.
+                </template>
+                <template v-else>
+                    <strong>{{ fa(apps.installed) }} راننده</strong> برنامه را دارند،
+                    <strong>{{ fa(apps.today) }}</strong> نفرشان در ۲۴ ساعت گذشته آنلاین
+                    بوده‌اند. اعلان برای همین‌ها فوری می‌رسد؛ بقیه وقتی برنامه را باز
+                    کنند آن را می‌بینند.
+                </template>
             </AlertBox>
 
             <form class="space-y-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm" @submit.prevent="submit">

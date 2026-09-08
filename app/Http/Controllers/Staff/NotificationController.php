@@ -35,6 +35,7 @@ class NotificationController extends Controller
             'audiences' => Audience::options(),
             'reach' => $this->reach($factory->id),
             'sent' => $this->history(),
+            'apps' => $this->apps($factory->id),
         ]);
     }
 
@@ -71,6 +72,26 @@ class NotificationController extends Controller
         }
 
         return back()->with('success', "اعلان برای {$count} راننده ثبت شد.");
+    }
+
+    /**
+     * چند راننده واقعاً برنامه را نصب دارند و برنامه‌شان زنده است.
+     *
+     * «اعلان نمی‌رسد» دو علت کاملاً متفاوت دارد و بدون این عدد نمی‌شود
+     * فهمید کدام است: یا سرور اعلان نساخته، یا ساخته و هیچ برنامه‌ای
+     * سراغش نیامده. راننده‌ای که برنامه‌اش امروز سر زده، اعلان می‌گیرد.
+     *
+     * @return array{installed: int, today: int, last: string|null}
+     */
+    private function apps(int $factoryId): array
+    {
+        $drivers = Audience::All->query($factoryId);
+
+        return [
+            'installed' => (clone $drivers)->whereNotNull('app_last_seen_at')->count(),
+            'today' => (clone $drivers)->where('app_last_seen_at', '>=', now()->subDay())->count(),
+            'last' => (clone $drivers)->max('app_last_seen_at'),
+        ];
     }
 
     /**

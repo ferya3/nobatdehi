@@ -24,6 +24,7 @@ class Driver extends Authenticatable
         return [
             'mobile_verified_at' => 'datetime',
             'last_login_at' => 'datetime',
+            'app_last_seen_at' => 'datetime',
             'is_blocked' => 'boolean',
         ];
     }

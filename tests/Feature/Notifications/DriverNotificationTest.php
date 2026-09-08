@@ -250,15 +250,65 @@ final class DriverNotificationTest extends TestCase
             ->assertJsonPath('realtime', true);
     }
 
-    /** بدون نوبتِ فعال، اتصال دائم فقط باتری می‌سوزاند */
+    /**
+     * راننده‌ی بی‌نوبت هم باید اعلان بگیرد.
+     *
+     * اول اتصال را به داشتنِ نوبتِ فعال گره زده بودم تا باتری نسوزد. غلط
+     * بود: «فردا تعطیل است» دقیقاً به دردِ کسی می‌خورد که هنوز نوبت
+     * نگرفته — همان کسی که آن دروازه کنارش می‌گذاشت.
+     */
     #[Test]
-    public function a_driver_with_nothing_booked_is_not_told_to_hold_a_connection(): void
+    public function a_driver_with_nothing_booked_still_holds_a_connection(): void
     {
         $driver = Driver::create(['mobile' => '09123000009', 'name' => 'بی‌نوبت']);
 
         $this->actingAs($driver, 'driver')
             ->getJson(route('driver.api.config'))
-            ->assertJsonPath('realtime', false);
+            ->assertJsonPath('realtime', true);
+    }
+
+    /**
+     * هر تماسِ برنامه ردِ خودش را می‌گذارد.
+     *
+     * «اعلان نمی‌رسد» دو علتِ کاملاً متفاوت دارد — سرور نساخته، یا ساخته و
+     * هیچ گوشی‌ای سراغش نیامده. بدون این ستون، آن دو از هم قابل تشخیص نیستند.
+     */
+    #[Test]
+    public function the_panel_can_tell_whether_any_app_is_actually_talking_to_it(): void
+    {
+        $driver = $this->book('09123000001', '11')->driver;
+
+        $this->assertNull($driver->app_last_seen_at);
+
+        $this->actingAs($driver, 'driver')->getJson(route('driver.api.config'))->assertOk();
+
+        $this->assertNotNull($driver->fresh()->app_last_seen_at);
+
+        // اینجا عمداً کاربر عوض می‌شود: actingAs قبلی راننده بود و
+        // درخواستِ پنل با آن نشست به صفحه‌ی ورود می‌خورد، نه به Inertia
+        $this->actingAs($this->manager(), 'web')
+            ->get(route('staff.notifications.index'))
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('apps.installed', 1)
+                ->where('apps.today', 1)
+                ->etc());
+    }
+
+    /** پخشِ اعلان نباید به بالا بودنِ worker صف گره بخورد */
+    #[Test]
+    public function the_notification_broadcasts_without_waiting_for_a_queue_worker(): void
+    {
+        $this->assertInstanceOf(
+            \Illuminate\Contracts\Broadcasting\ShouldBroadcastNow::class,
+            new DriverNotificationSent(
+                DriverNotification::create([
+                    'driver_id' => $this->book('09123000001', '11')->driver_id,
+                    'title' => 'خبر',
+                    'body' => '…',
+                ]),
+            ),
+        );
     }
 
     #[Test]
