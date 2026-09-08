@@ -99,6 +99,90 @@ else
     as_app "git --no-pager log --oneline '${BEFORE}..${AFTER}'" | sed 's/^/      /'
 fi
 
+# ------------------------------------------------------------- Nginx
+
+# همان درسِ .env، این بار برای Nginx: نصب‌های قدیمی هرگز تنظیمات تازه را
+# نمی‌گرفتند چون فقط install.sh آن‌ها را می‌نوشت و کسی install.sh را دوباره
+# اجرا نمی‌کند.
+#
+# روی نصب واقعی دیده شد: پیش‌فرض اوبونتو «gzip on» است ولی gzip_types کامنت
+# شده، یعنی عملاً فقط text/html فشرده می‌شود. app.js با ۲۰۱ کیلوبایت خام از
+# سیم رد می‌شد که با gzip می‌شود ۶۸.
+
+step "تنظیمات کارایی Nginx"
+
+if command -v nginx >/dev/null 2>&1 && [[ -d /etc/nginx/conf.d ]]; then
+    PERF_CONF="/etc/nginx/conf.d/nobatdehi-performance.conf"
+
+    cat > "$PERF_CONF" <<'NGINXPERF'
+# «gzip on;» عمداً اینجا نیست.
+#
+# اوبونتو خودش در nginx.conf روشنش کرده و تکرارش خطای «duplicate directive»
+# می‌دهد که کل Nginx را می‌خواباند — نه اینکه مقدار قبلی را عوض کند. آنچه
+# کم بود gzip_types بود که آنجا کامنت مانده و بدون آن فقط text/html فشرده
+# می‌شود.
+gzip_vary on;
+gzip_proxied any;
+gzip_comp_level 5;
+gzip_min_length 512;
+
+# woff2 عمداً در فهرست نیست: خودش از قبل فشرده است و gzip فقط CPU می‌سوزاند
+# بدون اینکه حتی یک بایت کم کند.
+gzip_types
+    text/plain
+    text/css
+    text/xml
+    text/javascript
+    application/javascript
+    application/json
+    application/manifest+json
+    application/xml
+    application/rss+xml
+    image/svg+xml;
+NGINXPERF
+
+    # HTTP/2 روی بلوکی که certbot ساخته.
+    #
+    # روی nginx ۱.۲۴ — همان چیزی که اوبونتو ۲۴.۰۴ دارد — دستور «http2 on;»
+    # اصلاً وجود ندارد و کل پیکربندی را می‌خواباند. تنها راه، افزودن به خط
+    # listen است؛ روی نسخه‌های جدیدتر هم کار می‌کند، فقط deprecated است.
+    SITE="/etc/nginx/sites-available/nobatdehi"
+
+    if [[ -f "$SITE" ]]; then
+        cp "$SITE" "${SITE}.pre-http2"
+
+        python3 - "$SITE" <<'HTTP2PY'
+import re, sys, pathlib
+p = pathlib.Path(sys.argv[1])
+text = p.read_text()
+p.write_text(re.sub(
+    r'(?m)^(\s*listen\s+[^;\n]*\b443\s+ssl)(?![^;\n]*http2)([^;\n]*);',
+    r'\1 http2\2;',
+    text,
+))
+HTTP2PY
+    fi
+
+    if nginx -t >/dev/null 2>&1; then
+        rm -f "${SITE}.pre-http2"
+        svc reload nginx
+        ok "gzip و HTTP/2 اعمال شد."
+    else
+        rm -f "$PERF_CONF"
+
+        if [[ -f "${SITE}.pre-http2" ]]; then
+            mv "${SITE}.pre-http2" "$SITE"
+        fi
+
+        if nginx -t >/dev/null 2>&1; then
+            svc reload nginx
+        fi
+        warn "تنظیمات کارایی پیکربندی Nginx را خراب کرد؛ همه‌چیز به حالت قبل برگشت."
+    fi
+else
+    info "Nginx روی این ماشین نیست؛ رد شد."
+fi
+
 # --------------------------------------------------- پیش‌فرض‌های امنیتی .env
 
 # update.sh تا امروز به .env دست نمی‌زد و منطقی هم بود: رمز دیتابیس و کلیدهای

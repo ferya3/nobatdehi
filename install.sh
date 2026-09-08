@@ -56,6 +56,40 @@ trap 'die "اجرا در خط $LINENO متوقف شد (فرمان: $BASH_COMMAND
 
 as_app() { sudo -u "$APP_USER" -H bash -lc "cd '$APP_DIR' && $1"; }
 
+# HTTP/2 روی بلوکی که certbot ساخته.
+#
+# روی nginx ۱.۲۴ (همان چیزی که اوبونتو ۲۴.۰۴ دارد) دستور «http2 on;» اصلاً
+# وجود ندارد و کل پیکربندی را می‌خواباند؛ تنها راه، افزودن به خط listen است.
+# آن شکل روی نسخه‌های جدیدتر هم کار می‌کند، فقط هشدار deprecated می‌دهد.
+enable_http2() {
+    local site="/etc/nginx/sites-available/nobatdehi"
+    local backup="${site}.pre-http2"
+
+    [[ -f "$site" ]] || return 0
+
+    cp "$site" "$backup"
+
+    python3 - "$site" <<'HTTP2PY'
+import re, sys, pathlib
+p = pathlib.Path(sys.argv[1])
+text = p.read_text()
+p.write_text(re.sub(
+    r'(?m)^(\s*listen\s+[^;\n]*\b443\s+ssl)(?![^;\n]*http2)([^;\n]*);',
+    r'\1 http2\2;',
+    text,
+))
+HTTP2PY
+
+    if nginx -t >/dev/null 2>&1; then
+        rm -f "$backup"
+        svc reload nginx
+        info "HTTP/2 فعال شد."
+    else
+        mv "$backup" "$site"
+        warn "فعال‌کردن HTTP/2 پیکربندی را خراب کرد؛ به حالت قبل برگشت."
+    fi
+}
+
 # روی سرور واقعی همیشه systemd است، ولی این اسکریپت ممکن است داخل کانتینر یا
 # WSL هم اجرا شود. آنجا systemctl فقط «Failed to connect to bus» می‌دهد.
 if [[ -d /run/systemd/system ]]; then
@@ -611,6 +645,39 @@ else
     info "IPv6 روی این میزبان فعال نیست؛ فقط IPv4 پیکربندی شد."
 fi
 
+# فشرده‌سازی — در conf.d و نه داخل بلوک سایت، چون سطح http است و باید روی
+# هر چیزی که Nginx سرو می‌کند اعمال شود.
+#
+# پیش‌فرض اوبونتو «gzip on» است ولی gzip_types کامنت شده، یعنی عملاً فقط
+# text/html فشرده می‌شود و JS و CSS خام از سیم رد می‌شوند. روی همین پروژه
+# اندازه‌گیری شد: app.js از ۲۰۱ به ۶۸ کیلوبایت و app.css از ۶۱ به ۱۱.
+cat > /etc/nginx/conf.d/nobatdehi-performance.conf <<'NGINXPERF'
+# «gzip on;» عمداً اینجا نیست.
+#
+# اوبونتو خودش در nginx.conf روشنش کرده و تکرارش خطای «duplicate directive»
+# می‌دهد که کل Nginx را می‌خواباند — نه اینکه مقدار قبلی را عوض کند. آنچه
+# کم بود gzip_types بود که آنجا کامنت مانده و بدون آن فقط text/html فشرده
+# می‌شود.
+gzip_vary on;
+gzip_proxied any;
+gzip_comp_level 5;
+gzip_min_length 512;
+
+# woff2 عمداً در فهرست نیست: خودش از قبل فشرده است و gzip فقط CPU می‌سوزاند
+# بدون اینکه حتی یک بایت کم کند.
+gzip_types
+    text/plain
+    text/css
+    text/xml
+    text/javascript
+    application/javascript
+    application/json
+    application/manifest+json
+    application/xml
+    application/rss+xml
+    image/svg+xml;
+NGINXPERF
+
 cat > /etc/nginx/sites-available/nobatdehi <<NGINX
 server {
     listen 80;
@@ -724,6 +791,7 @@ if [[ "$ENABLE_TLS" != "no" && -n "$DOMAIN" ]]; then
 
     if certbot "${CERTBOT_ARGS[@]}"; then
         info "گواهی نصب شد و تمدید خودکار فعال است."
+        enable_http2
     else
         warn "دریافت گواهی ناموفق بود (احتمالاً DNS هنوز به این سرور اشاره نمی‌کند)."
         warn "بعد از درست‌شدن DNS اجرا کنید: sudo certbot --nginx -d ${DOMAIN}"
