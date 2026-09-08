@@ -16,6 +16,31 @@
 
 پس همان چند رفتاری که واقعاً لازم است دستی نوشته شده — حدود ۱۵۰ خط Kotlin.
 
+## گرفتن APK بدون نصب هیچ چیزی
+
+گیت‌هاب خودش APK را می‌سازد (`.github/workflows/android.yml`). لازم نیست
+Android Studio یا SDK روی کامپیوترتان باشد.
+
+**دانلود مستقیم — از داخل ایران باز است:**
+
+<https://raw.githubusercontent.com/ferya3/nobatdehi/apk/nobatdehi-driver.apk>
+
+⚠️ بخش **Artifacts** در صفحه‌ی Actions را فراموش کنید: فایلش از
+`blob.core.windows.net` سرو می‌شود و از ایران دانلود نمی‌شود. شاخه‌ی `apk`
+دقیقاً برای همین ساخته شده.
+
+**گذاشتنش روی سرور، تا راننده‌ها هم بتوانند بگیرند** — آن‌ها هم به
+گیت‌هاب دسترسی ندارند:
+
+```bash
+cd /var/www/nobatdehi
+sudo -u nobatdehi curl -fsSL -o public/nobatdehi-driver.apk \
+  https://raw.githubusercontent.com/ferya3/nobatdehi/apk/nobatdehi-driver.apk
+```
+
+بعد از آن آدرس دانلود برای راننده‌ها این است:
+`https://sedo.site/nobatdehi-driver.apk`
+
 ## ساخت روی ویندوز — ساده‌ترین راه
 
 `build-apk.sh` یک اسکریپت لینوکسی است و در Command Prompt ویندوز اجرا

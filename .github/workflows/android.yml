@@ -14,7 +14,7 @@ on:
       - '.github/workflows/android.yml'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   apk:
@@ -45,3 +45,23 @@ jobs:
           name: nobatdehi-driver-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+
+      # خروجی بالا از blob.core.windows.net سرو می‌شود که از ایران مسدود
+      # است، پس همان فایل روی شاخه‌ی apk هم گذاشته می‌شود — آنجا از راه
+      # git و raw.githubusercontent.com در دسترس است.
+      #
+      # شاخه هر بار از نو ساخته و جایگزین می‌شود تا تاریخچه‌ی مخزن پر از
+      # نسخه‌های قدیمی APK نشود.
+      - name: Publish APK to the apk branch
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PUB="$(mktemp -d)"
+          cp android/app/build/outputs/apk/debug/app-debug.apk "$PUB/nobatdehi-driver.apk"
+          cd "$PUB"
+          git init -q -b apk
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add nobatdehi-driver.apk
+          git commit -q -m "APK ساخته‌شده از $GITHUB_SHA"
+          git push -q -f "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" apk
