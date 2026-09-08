@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Driver\AppConfigController;
 use App\Http\Controllers\Driver\AppointmentController;
 use App\Http\Controllers\Driver\BookingController;
 use App\Http\Controllers\Driver\NotificationController as DriverNotificationController;
@@ -65,6 +66,8 @@ Route::prefix('queue')->name('driver.')->group(function () {
          * راهِ push واقعی (Firebase) از ایران در دسترس نیست، پس برنامه خودش
          * هر چند دقیقه سر می‌زند. همان کوکیِ نشست، همان راننده.
          */
+        Route::get('/api/config', AppConfigController::class)->name('api.config');
+
         Route::get('/api/notifications', [DriverNotificationController::class, 'index'])
             ->name('api.notifications');
         Route::post('/api/notifications/ack', [DriverNotificationController::class, 'acknowledge'])

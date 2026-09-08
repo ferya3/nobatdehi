@@ -7,4 +7,9 @@
 
     <string name="channel_queue">اطلاعیه‌های نوبت</string>
     <string name="channel_queue_description">خبر رسیدن نوبت و اطلاعیه‌های کارخانه</string>
+
+    <string name="channel_service">اتصال به سامانه</string>
+    <string name="channel_service_description">تا خبر نوبت در همان لحظه برسد</string>
+    <string name="service_title">در انتظار خبر نوبت</string>
+    <string name="service_body">به محض رسیدن نوبت خبر می‌دهیم.</string>
 </resources>

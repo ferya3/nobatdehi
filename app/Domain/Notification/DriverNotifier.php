@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Notification;
 
+use App\Events\DriverNotificationSent;
 use App\Models\Driver;
 use App\Models\DriverNotification;
 use Illuminate\Support\Facades\DB;
@@ -30,7 +31,7 @@ final class DriverNotifier
         string $kind = 'general',
         ?int $createdBy = null,
     ): DriverNotification {
-        return DriverNotification::create([
+        $notification = DriverNotification::create([
             'driver_id' => $driver->id,
             'created_by' => $createdBy,
             'title' => $title,
@@ -38,6 +39,10 @@ final class DriverNotifier
             'path' => $path,
             'kind' => $kind,
         ]);
+
+        DriverNotificationSent::dispatch($notification);
+
+        return $notification;
     }
 
     /**
@@ -77,6 +82,18 @@ final class DriverNotifier
                 ])->all();
 
                 DB::table('driver_notifications')->insert($rows);
+
+                /*
+                 * درج دسته‌ای شناسه برنمی‌گرداند، پس ردیف‌ها را دوباره
+                 * می‌خوانیم تا هر راننده رویدادِ کانالِ خودش را بگیرد.
+                 *
+                 * یک پرس‌وجوی اضافه به‌ازای هر ۵۰۰ نفر — بهایی که می‌دهیم
+                 * تا اعلان همان لحظه برسد و نه ربع ساعت بعد.
+                 */
+                DriverNotification::whereIn('driver_id', $drivers->pluck('id'))
+                    ->where('created_at', $now)
+                    ->where('title', $title)
+                    ->each(fn (DriverNotification $n) => DriverNotificationSent::dispatch($n));
 
                 $total += count($rows);
             });

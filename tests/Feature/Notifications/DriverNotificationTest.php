@@ -8,6 +8,7 @@ use App\Domain\Access\Roles;
 use App\Domain\Appointment\Actions\CreateAppointment;
 use App\Domain\Appointment\Enums\AppointmentStatus as S;
 use App\Domain\Truck\PlateNumber;
+use App\Events\DriverNotificationSent;
 use App\Events\AppointmentTransitioned;
 use App\Listeners\NotifyNextDriverWhenLoadingStarts;
 use App\Models\Appointment;
@@ -18,6 +19,7 @@ use App\Models\Truck;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Event;
 use Inertia\Testing\AssertableInertia;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Support\SeedsFactory;
@@ -223,6 +225,74 @@ final class DriverNotificationTest extends TestCase
                 ->where('reach.all', 2)
                 ->where('reach.in_queue', 0)
                 ->has('audiences', 4));
+    }
+
+    /**
+     * برنامه باید بتواند بپرسد به کجا وصل شود.
+     *
+     * هیچ‌کدام از این‌ها در APK پخته نشده‌اند: آدرسی که در زمان build داخل
+     * فایل بنشیند، روزی که دامنه عوض شود بی‌صدا می‌شکند — و برخلاف وب،
+     * اینجا باید APK تازه به دستِ تک‌تکِ راننده‌ها برسد.
+     */
+    #[Test]
+    public function the_app_asks_the_server_where_to_connect(): void
+    {
+        config(['broadcasting.connections.reverb.key' => 'test-key']);
+
+        $driver = $this->book('09123000001', '11')->driver;
+
+        $this->actingAs($driver, 'driver')
+            ->getJson(route('driver.api.config'))
+            ->assertOk()
+            ->assertJsonPath('driver.id', $driver->id)
+            ->assertJsonPath('reverb.key', 'test-key')
+            // نوبتِ فعال دارد، پس اتصال دائم می‌ارزد
+            ->assertJsonPath('realtime', true);
+    }
+
+    /** بدون نوبتِ فعال، اتصال دائم فقط باتری می‌سوزاند */
+    #[Test]
+    public function a_driver_with_nothing_booked_is_not_told_to_hold_a_connection(): void
+    {
+        $driver = Driver::create(['mobile' => '09123000009', 'name' => 'بی‌نوبت']);
+
+        $this->actingAs($driver, 'driver')
+            ->getJson(route('driver.api.config'))
+            ->assertJsonPath('realtime', false);
+    }
+
+    #[Test]
+    public function a_stranger_cannot_read_the_connection_settings(): void
+    {
+        $this->getJson(route('driver.api.config'))->assertUnauthorized();
+    }
+
+    /** هر اعلان روی کانالِ خصوصیِ همان راننده پخش می‌شود و نه جای دیگر */
+    #[Test]
+    public function every_notification_is_broadcast_on_its_own_drivers_channel(): void
+    {
+        Event::fake([DriverNotificationSent::class]);
+
+        $first = $this->book('09123000001', '11')->driver;
+        $second = $this->book('09123000002', '12')->driver;
+
+        $this->actingAs($this->manager())
+            ->post(route('staff.notifications.store'), [
+                'audience' => 'today',
+                'title' => 'خبر',
+                'body' => '…',
+            ])
+            ->assertSessionHas('success');
+
+        Event::assertDispatchedTimes(DriverNotificationSent::class, 2);
+
+        foreach ([$first, $second] as $driver) {
+            Event::assertDispatched(
+                DriverNotificationSent::class,
+                fn (DriverNotificationSent $e) => $e->notification->driver_id === $driver->id
+                    && $e->broadcastOn()[0]->name === "private-driver.{$driver->id}",
+            );
+        }
     }
 
     /** خبرِ «نوبت جلویی شروع شد» هم باید روی برنامه دیده شود */

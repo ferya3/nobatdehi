@@ -104,7 +104,7 @@ class MainActivity : AppCompatActivity() {
             }
         })
 
-        NotificationWorker.createChannel(this)
+        Notifier.createChannels(this)
         NotificationWorker.schedule(this)
         requestNotificationPermission()
 
@@ -125,6 +125,19 @@ class MainActivity : AppCompatActivity() {
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         web.saveState(outState)
+    }
+
+    /*
+     * سرویس فقط از حالتِ «برنامه جلوی چشم است» می‌تواند شروع شود.
+     *
+     * اندروید ۱۲ به بعد شروعِ سرویسِ پیش‌زمینه از پس‌زمینه را ممنوع کرده و
+     * با ForegroundServiceStartNotAllowedException برنامه را می‌اندازد. پس
+     * همین‌جا، جایی که مطمئناً جلوی چشم است.
+     */
+    override fun onResume() {
+        super.onResume()
+
+        RealtimeService.start(this)
     }
 
     override fun onPause() {
