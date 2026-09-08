@@ -1,0 +1,47 @@
+name: APK راننده
+
+# ساخت APK روی سرورهای گیت‌هاب.
+#
+# چرا: ساختِ محلی به Android SDK نیاز دارد و دانلودش از داخل ایران مسدود
+# است. اینجا SDK از پیش نصب است و خروجی را می‌شود مستقیم دانلود کرد —
+# روی ویندوز هیچ چیزی لازم نیست نصب شود.
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'android/**'
+      - '.github/workflows/android.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    name: ساخت APK
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Android SDK packages
+        run: |
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses > /dev/null 2>&1 || true
+          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0" > /dev/null
+
+      - name: Build debug APK
+        working-directory: android
+        run: |
+          export JAVA_HOME="${JAVA_HOME_17_X64:-$JAVA_HOME}"
+          ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Upload APK
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: nobatdehi-driver-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
