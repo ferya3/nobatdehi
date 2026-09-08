@@ -93,6 +93,46 @@ curl -fsSL https://raw.githubusercontent.com/ferya3/nobatdehi/claude/system-arch
 یک قدم دستی می‌ماند: Service Worker پنل راننده فایل‌های `/build/` را کش می‌کند،
 پس یک بار `Ctrl+Shift+R` در مرورگر لازم است.
 
+## تغییر دامنه
+
+روی نصبی که از قبل کار می‌کند — مثلاً وقتی از IP به یک دامنه‌ی واقعی می‌روید:
+
+```bash
+BASE=https://raw.githubusercontent.com/ferya3/nobatdehi/claude/system-architecture-b9hlgv
+curl -fsSL -o set-domain.sh        "$BASE/set-domain.sh"
+curl -fsSL -o set-domain.sh.sha256 "$BASE/set-domain.sh.sha256"
+sha256sum -c set-domain.sh.sha256 && sudo bash set-domain.sh --domain example.ir --email you@example.com
+```
+
+**`install.sh` را دوباره اجرا نکنید.** در پایانش `db:seed` کامل می‌زند و
+`FactorySeeder` با `updateOrCreate` ساعات کاری، ظرفیت، تعداد لاین و محصولات را
+به پیش‌فرض برمی‌گرداند — یعنی هرچه از پنل تنظیم کرده‌اید پاک می‌شود.
+
+`set-domain.sh` فقط دامنه را عوض می‌کند: `server_name` در Nginx، گواهی HTTPS،
+`APP_URL` و `VITE_REVERB_*`، بعد `npm run build` و ری‌استارت سرویس‌ها. به داده
+دست نمی‌زند.
+
+| گزینه | کار |
+|---|---|
+| `--domain <name>` | دامنه‌ی جدید (اجباری) |
+| `--email <addr>` | ایمیل ثبت گواهی Let's Encrypt |
+| `--no-tls` | بدون HTTPS |
+| `--cloudflare` / `--no-cloudflare` | تشخیص خودکار پروکسی Cloudflare را دستی کن |
+
+### پشت Cloudflare
+
+اگر رکورد DNS «ابر نارنجی» باشد، اسکریپت خودش تشخیص می‌دهد و رنج‌های IP
+کلادفلر را به `TRUSTED_PROXIES` اضافه می‌کند. بدون آن، Laravel آدرس کلادفلر را
+IP کاربر می‌بیند و **همه‌ی** درخواست‌ها از یک IP شمرده می‌شوند — یعنی
+rate limit و لاگ امنیتی بی‌اثر می‌شوند.
+
+دو چیز را خودتان باید در پنل کلادفلر درست کنید:
+
+- **SSL/TLS → Full (strict)**. روی `Flexible`، ریدایرکت HTTPS این سرور یک حلقه‌ی
+  بی‌پایان می‌سازد و سایت اصلاً باز نمی‌شود.
+- **Network → WebSockets** روشن باشد، وگرنه صف زنده به‌روز نمی‌شود و پنل به
+  polling هر ۲۰ ثانیه می‌افتد.
+
 ## راه‌اندازی محلی
 
 ```bash
