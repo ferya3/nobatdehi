@@ -49,6 +49,7 @@ BOLD=$'\e[1m'; GREEN=$'\e[32m'; YELLOW=$'\e[33m'; RED=$'\e[31m'; RESET=$'\e[0m'
 step()  { printf '\n%s==> %s%s\n' "$BOLD" "$1" "$RESET"; }
 info()  { printf '    %s\n' "$1"; }
 warn()  { printf '    %s%s%s\n' "$YELLOW" "$1" "$RESET"; }
+ok()    { printf '    %s%s%s\n' "$GREEN" "$1" "$RESET"; }
 die()   { printf '\n%sخطا: %s%s\n' "$RED" "$1" "$RESET" >&2; exit 1; }
 
 # خطای هر خط را با شماره‌اش گزارش کن، نه یک «Aborted» خشک و خالی
