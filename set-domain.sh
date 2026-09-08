@@ -266,9 +266,13 @@ fi
 
 set_env APP_URL "${SCHEME}://${DOMAIN}"
 set_env REVERB_SCHEME "$SCHEME"
-set_env VITE_REVERB_HOST "$DOMAIN"
-set_env VITE_REVERB_PORT "$PUBLIC_PORT"
-set_env VITE_REVERB_SCHEME "$SCHEME"
+
+# میزبان WebSocket دیگر داخل build پخته نمی‌شود؛ مرورگر آن را از آدرس خودِ
+# صفحه می‌سازد. مقدارِ کهنه در این سه کلید همان چیزی بود که بعد از تغییر
+# دامنه، اتصال زنده را بی‌صدا می‌کشت.
+set_env VITE_REVERB_HOST ""
+set_env VITE_REVERB_PORT ""
+set_env VITE_REVERB_SCHEME ""
 
 info "APP_URL = ${SCHEME}://${DOMAIN}"
 

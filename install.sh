@@ -482,11 +482,14 @@ set_env REVERB_SERVER_PORT 8080
 # Reverb از پشت Nginx سرو می‌شود؛ مستقیم روی شبکه گوش نمی‌دهد
 set_env REVERB_SERVER_HOST 127.0.0.1
 
-# مرورگر از پشت Nginx وصل می‌شود، پس میزبان و پورت عمومی فرق دارند
+# مرورگر آدرس WebSocket را از خودِ صفحه می‌سازد؛ فقط کلید باید پخته شود.
+#
+# میزبان و پورت عمداً خالی می‌مانند: اگر پر باشند در زمان build داخل
+# جاوااسکریپت می‌نشینند و با اولین تغییر دامنه، اتصال زنده بی‌صدا می‌میرد.
 set_env VITE_REVERB_APP_KEY '${REVERB_APP_KEY}'
-set_env VITE_REVERB_HOST "$REVERB_PUBLIC_HOST"
-set_env VITE_REVERB_PORT "$REVERB_PUBLIC_PORT"
-set_env VITE_REVERB_SCHEME "$REVERB_SCHEME"
+set_env VITE_REVERB_HOST ""
+set_env VITE_REVERB_PORT ""
+set_env VITE_REVERB_SCHEME ""
 
 set_env OTP_EXPOSE_IN_RESPONSE false
 
@@ -795,9 +798,8 @@ if [[ "$ENABLE_TLS" != "no" && -n "$DOMAIN" ]]; then
     else
         warn "دریافت گواهی ناموفق بود (احتمالاً DNS هنوز به این سرور اشاره نمی‌کند)."
         warn "بعد از درست‌شدن DNS اجرا کنید: sudo certbot --nginx -d ${DOMAIN}"
-        # بدون HTTPS، مرورگر WebSocket امن را رد می‌کند؛ .env باید صادق بماند
-        set_env VITE_REVERB_SCHEME http
-        set_env VITE_REVERB_PORT 80
+        # بدون گواهی، سایت روی http می‌ماند. آدرس WebSocket خودش از همان
+        # صفحه ساخته می‌شود، پس فقط APP_URL باید صادق بماند.
         set_env APP_URL "http://${DOMAIN}"
         as_app "npm run build --silent"
         as_app "$PHP_BIN artisan config:cache"

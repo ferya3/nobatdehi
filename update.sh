@@ -237,6 +237,14 @@ repair APP_DEBUG false "روی production، صفحه‌ی خطا مسیر فای
 repair OTP_EXPOSE_IN_RESPONSE false "وگرنه کد ورود در پاسخ HTTP برمی‌گردد و هرکس با شماره‌ی دیگران وارد می‌شود"
 repair REVERB_SERVER_HOST 127.0.0.1 "Reverb باید از پشت Nginx سرو شود، نه مستقیم روی شبکه"
 
+# میزبان WebSocket در زمان build داخل جاوااسکریپت پخته می‌شود. مقدارِ کهنه
+# در این سه کلید یعنی مرورگر سراغ دامنه‌ی قبلی می‌رود و اتصال زنده بی‌صدا
+# می‌میرد — پنل تا ابد روی «هر ۲۰ ثانیه» می‌ماند. خالی که باشند، آدرس از
+# خودِ صفحه ساخته می‌شود و همیشه درست است.
+repair VITE_REVERB_HOST "" "آدرس WebSocket باید از خودِ صفحه خوانده شود، نه از build"
+repair VITE_REVERB_PORT "" "همراه VITE_REVERB_HOST"
+repair VITE_REVERB_SCHEME "" "همراه VITE_REVERB_HOST"
+
 # نشستِ رمزنگاری‌نشده در Redis قابل خواندن است. عوض‌کردنش همه را logout
 # می‌کند، پس جداگانه و با پیام صریح.
 if [[ "$(env_get SESSION_ENCRYPT)" != "true" ]]; then
