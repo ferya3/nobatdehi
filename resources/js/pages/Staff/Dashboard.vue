@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import AreaChart from '@/components/AreaChart.vue';
+import Icon from '@/components/Icon.vue';
+import ProgressRing from '@/components/ProgressRing.vue';
+import StatTile from '@/components/StatTile.vue';
 import PlateBadge from '@/components/PlateBadge.vue';
 import ShareBar from '@/components/ShareBar.vue';
 import StatusBadge from '@/components/StatusBadge.vue';
@@ -68,9 +71,39 @@ const weekChart = computed(() =>
     props.week.daily.map((row) => ({ label: row.jalali.slice(5), value: row.total })),
 );
 
+/** رنگ لبه‌ی ردیف صف — همان رنگ‌های وضعیت که در بقیه‌ی پنل هم هست */
+const ROW_TONE: Record<string, string> = {
+    booked: 'bg-slate-400',
+    waiting: 'bg-amber-500',
+    called: 'bg-blue-500',
+    checkedin: 'bg-indigo-500',
+    loading: 'bg-violet-500',
+    loaded: 'bg-emerald-500',
+    completed: 'bg-emerald-600',
+    failed: 'bg-rose-500',
+};
+
 const busyLines = computed(() => props.lines.filter((line) => line.busy).length);
 
 const productShare = computed(() => props.week.byProduct.map((row) => ({ name: row.name, value: row.tons })));
+
+/**
+ * روند و تغییر، از همان داده‌ی هفته که از قبل می‌آمد.
+ *
+ * هیچ عددی ساختگی نیست: اسپارک‌لاین همان هفت روزِ نمودار پایین است و
+ * «تغییر» تفاضلِ امروز و دیروزِ همان فهرست.
+ */
+const trend = computed(() => ({
+    total: props.week.daily.map((d) => d.total),
+    completed: props.week.daily.map((d) => d.completed),
+    noShow: props.week.daily.map((d) => d.no_show),
+}));
+
+function deltaOf(series: number[]): number | null {
+    if (series.length < 2) return null;
+
+    return series[series.length - 1] - series[series.length - 2];
+}
 
 /**
  * کامیونی که روی لاین است ولی لاینش ثبت نشده.
@@ -188,7 +221,12 @@ watch(connected, (isLive) => {
             <section class="overflow-hidden rounded-2xl bg-gradient-to-bl from-brand-800 via-brand-700 to-brand-600 shadow-lg shadow-brand-900/10">
                 <div class="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-5 py-3.5">
                     <div>
-                        <h1 class="text-base font-bold text-white">وضعیت بارگیری امروز</h1>
+                        <h1 class="flex items-center gap-2 text-base font-bold text-white">
+                            <span class="flex size-8 items-center justify-center rounded-xl bg-white/15">
+                                <Icon name="activity" class="size-4" />
+                            </span>
+                            وضعیت بارگیری امروز
+                        </h1>
                         <p class="mt-0.5 text-xs text-brand-100/80">{{ jalaliDate }}</p>
                     </div>
 
@@ -263,7 +301,7 @@ watch(connected, (isLive) => {
                     <span class="flex size-5 items-center justify-center rounded-full bg-rose-500 text-[11px] font-bold text-white">
                         {{ alerts.length }}
                     </span>
-                    <h2 class="text-sm font-semibold text-rose-900">رسیدگی لازم است</h2>
+                    <h2 class="flex items-center gap-1.5 text-sm font-semibold text-rose-900"><Icon name="alert" class="size-4" />رسیدگی لازم است</h2>
                 </div>
 
                 <ul class="divide-y divide-rose-200/60">
@@ -291,7 +329,7 @@ watch(connected, (isLive) => {
             -->
             <section v-if="canSeeQueue && lines.length">
                 <div class="mb-2.5 flex items-center justify-between">
-                    <h2 class="text-sm font-semibold text-slate-700">خطوط بارگیری</h2>
+                    <h2 class="flex items-center gap-1.5 text-sm font-semibold text-slate-700"><Icon name="layers" class="size-4 text-brand-500" />خطوط بارگیری</h2>
                     <span class="text-xs text-slate-500">
                         <span class="num font-medium text-slate-700">{{ busyLines }}</span>
                         از
@@ -313,16 +351,25 @@ watch(connected, (isLive) => {
                         v-for="line in lines"
                         :key="line.id"
                         :class="[
-                            'rounded-2xl border p-4 transition',
+                            'relative flex min-h-[9.5rem] flex-col overflow-hidden rounded-2xl border p-4 transition',
                             !line.busy
-                                ? 'border-dashed border-slate-200 bg-slate-50/60'
+                                ? 'border-dashed border-slate-200 bg-white/50'
                                 : line.is_late
-                                  ? 'border-rose-200 bg-white shadow-sm ring-1 ring-rose-100'
-                                  : 'border-slate-200 bg-white shadow-sm',
+                                  ? 'border-rose-200 bg-white shadow-md shadow-rose-100/60'
+                                  : 'border-slate-200/70 bg-white shadow-sm hover:shadow-md',
                         ]"
                     >
-                        <div class="flex items-center justify-between">
-                            <span class="text-sm font-semibold text-slate-800">{{ line.name }}</span>
+                        <span
+                            v-if="line.busy"
+                            :class="['absolute inset-y-0 start-0 w-1', line.is_late ? 'bg-rose-500' : 'bg-violet-500']"
+                            aria-hidden="true"
+                        />
+
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="flex items-center gap-1.5 text-sm font-semibold text-slate-800">
+                                <Icon name="layers" class="size-4 text-slate-400" />
+                                {{ line.name }}
+                            </span>
                             <span
                                 :class="[
                                     'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium',
@@ -343,38 +390,34 @@ watch(connected, (isLive) => {
                             </span>
                         </div>
 
-                        <template v-if="line.busy">
-                            <div class="mt-3 flex items-center gap-2">
-                                <span class="num rounded-lg bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-700">
-                                    #{{ line.number }}
-                                </span>
-                                <PlateBadge v-if="line.plate" :plate="line.plate" size="sm" />
-                            </div>
+                        <div v-if="line.busy" class="mt-3 flex flex-1 items-center gap-4">
+                            <ProgressRing :percent="line.percent ?? 0" :late="line.is_late" />
 
-                            <p class="mt-2 truncate text-sm text-slate-600">
-                                {{ line.driver ?? '—' }}
-                                <span v-if="line.truck_type" class="text-slate-400">· {{ line.truck_type }}</span>
-                            </p>
-                            <p v-if="line.product" class="truncate text-xs text-slate-400">{{ line.product }}</p>
-
-                            <div class="mt-3">
-                                <div class="h-1.5 overflow-hidden rounded-full bg-slate-100">
-                                    <div
-                                        :class="[
-                                            'h-full rounded-full transition-all duration-700',
-                                            line.is_late ? 'bg-rose-500' : 'bg-violet-500',
-                                        ]"
-                                        :style="{ width: `${line.percent}%` }"
-                                    />
+                            <div class="min-w-0 flex-1">
+                                <div class="flex items-center gap-2">
+                                    <span class="num rounded-lg bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-700">
+                                        #{{ line.number }}
+                                    </span>
+                                    <PlateBadge v-if="line.plate" :plate="line.plate" size="sm" />
                                 </div>
-                                <p class="mt-1.5 flex items-center justify-between text-[11px] text-slate-500">
-                                    <span>گذشته: <span class="num font-medium">{{ line.elapsed_minutes }}</span> دقیقه</span>
-                                    <span class="text-slate-400">از <span class="num">{{ line.expected_minutes }}</span></span>
+
+                                <p class="mt-1.5 truncate text-sm text-slate-700">{{ line.driver ?? '—' }}</p>
+                                <p class="truncate text-xs text-slate-400">
+                                    {{ line.truck_type }}<span v-if="line.product"> · {{ line.product }}</span>
+                                </p>
+                                <p class="mt-1 text-xs text-slate-500">
+                                    گذشته
+                                    <span class="num font-medium text-slate-700">{{ line.elapsed_minutes }}</span>
+                                    دقیقه از
+                                    <span class="num">{{ line.expected_minutes }}</span>
                                 </p>
                             </div>
-                        </template>
+                        </div>
 
-                        <p v-else class="mt-3 text-sm text-slate-400">کامیونی روی این خط نیست.</p>
+                        <div v-else class="flex flex-1 flex-col items-center justify-center gap-2 text-sm text-slate-400">
+                            <Icon name="truck" class="size-9 text-slate-200" />
+                            کامیونی روی این خط نیست.
+                        </div>
                     </div>
                 </div>
             </section>
@@ -396,52 +439,54 @@ watch(connected, (isLive) => {
             </div>
 
             <!--
-                ریزِ وضعیت‌ها.
+                کاشی‌های آمار.
 
-                دو گروه جدا و نه شش کارتِ یک‌شکل: چپ، جریانِ امروز؛ راست،
-                آنچه به هم خورده. شش کادرِ هم‌وزن، چشم را جایی نمی‌برد.
+                هر کاشی آیکون دارد، رنگِ لبه دارد، و اگر داده‌اش اجازه بدهد
+                تغییرِ نسبت به دیروز و روندِ هفته را هم نشان می‌دهد. عدد با
+                رنگِ متن می‌آید و نه با رنگِ وضعیت، تا همیشه خوانا بماند.
             -->
-            <div class="grid gap-3 lg:grid-cols-3">
-                <div class="card p-4 lg:col-span-2">
-                    <h2 class="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">جریان امروز</h2>
-
-                    <div class="grid grid-cols-3 divide-x divide-x-reverse divide-slate-100">
-                        <div class="px-2 text-center">
-                            <p class="num text-2xl font-bold text-amber-600">{{ counters.waiting }}</p>
-                            <p class="mt-0.5 text-xs text-slate-500">در انتظار</p>
-                        </div>
-                        <div class="px-2 text-center">
-                            <p class="num text-2xl font-bold text-violet-600">{{ counters.loading }}</p>
-                            <p class="mt-0.5 text-xs text-slate-500">در حال بارگیری</p>
-                        </div>
-                        <div class="px-2 text-center">
-                            <!-- «۰ دقیقه» یعنی هنوز بارگیریِ تمام‌شده‌ای نداریم، نه اینکه صفر طول کشیده -->
-                            <p class="text-2xl font-bold text-slate-900">
-                                {{ avgLoadingMinutes > 0 ? duration(avgLoadingMinutes) : '—' }}
-                            </p>
-                            <p class="mt-0.5 text-xs text-slate-500">میانگین بارگیری</p>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="card p-4">
-                    <h2 class="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">به نتیجه نرسید</h2>
-
-                    <div class="grid grid-cols-3 divide-x divide-x-reverse divide-slate-100">
-                        <div class="px-2 text-center">
-                            <p class="num text-2xl font-bold text-rose-600">{{ counters.cancelled }}</p>
-                            <p class="mt-0.5 text-xs text-slate-500">لغو</p>
-                        </div>
-                        <div class="px-2 text-center">
-                            <p class="num text-2xl font-bold text-rose-600">{{ counters.no_show }}</p>
-                            <p class="mt-0.5 text-xs text-slate-500">عدم حضور</p>
-                        </div>
-                        <div class="px-2 text-center">
-                            <p class="num text-2xl font-bold text-rose-500">٪{{ week.summary.no_show_rate }}</p>
-                            <p class="mt-0.5 text-xs text-slate-500">نرخ هفته</p>
-                        </div>
-                    </div>
-                </div>
+            <div class="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
+                <StatTile
+                    label="در انتظار"
+                    :value="counters.waiting"
+                    icon="clock"
+                    tone="amber"
+                />
+                <StatTile
+                    label="در حال بارگیری"
+                    :value="counters.loading"
+                    icon="truck"
+                    tone="violet"
+                />
+                <StatTile
+                    label="تکمیل‌شده"
+                    :value="counters.completed"
+                    icon="check"
+                    tone="emerald"
+                    :delta="deltaOf(trend.completed)"
+                    :trend="trend.completed"
+                />
+                <StatTile
+                    label="لغو شده"
+                    :value="counters.cancelled"
+                    icon="ban"
+                    tone="rose"
+                />
+                <StatTile
+                    label="عدم حضور"
+                    :value="counters.no_show"
+                    icon="alert"
+                    tone="rose"
+                    :delta="deltaOf(trend.noShow)"
+                    :higher-is-better="false"
+                    :trend="trend.noShow"
+                />
+                <StatTile
+                    label="میانگین بارگیری"
+                    :value="avgLoadingMinutes > 0 ? duration(avgLoadingMinutes) : '—'"
+                    icon="gauge"
+                    tone="brand"
+                />
             </div>
 
             <!--
@@ -452,7 +497,7 @@ watch(connected, (isLive) => {
             -->
             <section v-if="canSeeQueue" class="card overflow-hidden">
                 <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-5 py-3">
-                    <h2 class="text-sm font-semibold text-slate-700">صف امروز</h2>
+                    <h2 class="flex items-center gap-1.5 text-sm font-semibold text-slate-700"><Icon name="truck" class="size-4 text-brand-500" />صف امروز</h2>
                     <Link
                         :href="route('staff.queue.index')"
                         class="rounded-lg border border-slate-200 px-3 py-1 text-xs font-medium text-slate-600 transition hover:bg-slate-50"
@@ -475,8 +520,15 @@ watch(connected, (isLive) => {
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100">
-                            <tr v-for="row in liveRows" :key="row.ulid" class="transition hover:bg-slate-50/60">
-                                <td class="num px-4 py-2.5 font-semibold text-slate-800">{{ row.number }}</td>
+                            <tr v-for="row in liveRows" :key="row.ulid" class="group transition hover:bg-slate-50/70">
+                                <td class="relative px-4 py-2.5">
+                                    <!-- لبه‌ی رنگیِ وضعیت: ردیف‌ها بدون آن یک تخته‌ی یکنواخت‌اند -->
+                                    <span
+                                        :class="['absolute inset-y-1 start-0 w-1 rounded-full', ROW_TONE[row.status_tone] ?? 'bg-slate-300']"
+                                        aria-hidden="true"
+                                    />
+                                    <span class="num font-semibold text-slate-800">{{ row.number }}</span>
+                                </td>
                                 <td class="num px-4 py-2.5 text-slate-700">{{ row.time }}</td>
                                 <td class="px-4 py-2.5">
                                     <PlateBadge v-if="row.plate" :plate="row.plate" size="sm" />
@@ -519,14 +571,14 @@ watch(connected, (isLive) => {
 
             <div class="grid gap-5 lg:grid-cols-3">
                 <section class="card p-5 lg:col-span-2">
-                    <h2 class="mb-4 text-sm font-semibold text-slate-700">ورود کامیون در ۷ روز اخیر</h2>
+                    <h2 class="mb-4 flex items-center gap-1.5 text-sm font-semibold text-slate-700"><Icon name="activity" class="size-4 text-brand-500" />ورود کامیون در ۷ روز اخیر</h2>
                     <AreaChart :data="weekChart" unit="کامیون" />
                 </section>
 
                 <section class="card space-y-4 p-5">
-                    <h2 class="text-sm font-semibold text-slate-700">هفته‌ی گذشته</h2>
+                    <h2 class="flex items-center gap-1.5 text-sm font-semibold text-slate-700"><Icon name="chart" class="size-4 text-brand-500" />هفته‌ی گذشته</h2>
 
-                    <dl class="space-y-3">
+                    <dl class="space-y-2.5">
                         <div class="flex items-center justify-between">
                             <dt class="text-sm text-slate-500">کل کامیون</dt>
                             <dd class="num text-lg font-bold text-slate-900">{{ week.summary.total }}</dd>
@@ -559,7 +611,7 @@ watch(connected, (isLive) => {
 
             <div v-if="week.byProduct.length" class="grid gap-5 lg:grid-cols-3">
                 <section class="card p-5">
-                    <h2 class="mb-4 text-sm font-semibold text-slate-700">سهم محصولات از تناژ هفته</h2>
+                    <h2 class="mb-4 flex items-center gap-1.5 text-sm font-semibold text-slate-700"><Icon name="box" class="size-4 text-brand-500" />سهم محصولات از تناژ هفته</h2>
                     <ShareBar :data="productShare" unit="تن" />
                 </section>
 

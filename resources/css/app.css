@@ -55,8 +55,19 @@
         font-feature-settings: 'ss01'; /* ارقام لاتین را فارسی نمایش می‌دهد، بدون تغییر متن زیرین */
     }
 
+    /*
+     * زمینه‌ی صفحه یک خاکستریِ تخت نیست.
+     *
+     * یک هاله‌ی بسیار کم‌رنگِ برند در بالای صفحه، به کارت‌های سفید عمق
+     * می‌دهد؛ بدون آن، همه‌چیز روی یک سطح می‌نشیند و صفحه تخت دیده می‌شود.
+     */
     body {
-        @apply bg-slate-50 text-slate-800 antialiased;
+        @apply text-slate-800 antialiased;
+        background-color: var(--color-slate-100);
+        background-image:
+            radial-gradient(60rem 28rem at 100% -8rem, color-mix(in oklab, var(--color-brand-200) 55%, transparent), transparent),
+            radial-gradient(48rem 24rem at 0% -4rem, color-mix(in oklab, var(--color-brand-100) 70%, transparent), transparent);
+        background-attachment: fixed;
     }
 
     /* اعداد در فیلدهای عددی همیشه چپ‌چین و لاتین بمانند */
@@ -68,7 +79,12 @@
 }
 
 @utility card {
-    @apply rounded-2xl border border-slate-200/80 bg-white shadow-sm;
+    @apply rounded-2xl border border-slate-200/70 bg-white shadow-sm transition-shadow;
+}
+
+/* کارت‌هایی که سرشان شلوغ است، با hover کمی جلو می‌آیند */
+@utility card-hover {
+    @apply hover:shadow-md;
 }
 
 /*
