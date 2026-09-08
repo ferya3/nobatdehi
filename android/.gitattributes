@@ -1,0 +1,6 @@
+# اسکریپت لینوکسی باید LF بماند
+/gradlew    text eol=lf
+*.sh        text eol=lf
+
+# فایل bat در ویندوز اجرا می‌شود و باید CRLF بماند
+*.bat       text eol=crlf
