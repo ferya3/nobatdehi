@@ -27,7 +27,6 @@ const PRIMARY = [
     { label: 'باسکول', name: 'staff.weighbridge.index', pattern: 'staff.weighbridge.*', permission: 'weighing.record' },
     { label: 'بارگیری', name: 'staff.loading.index', pattern: 'staff.loading.*', permission: 'queue.start-loading' },
     { label: 'گزارش‌ها', name: 'staff.reports', pattern: 'staff.reports', permission: 'reports.view' },
-    { label: 'اعلان‌ها', name: 'staff.notifications.index', pattern: 'staff.notifications.*', permission: 'notifications.send' },
 ];
 
 /** هرچه یک بار تنظیم می‌شود و بعد دست نمی‌خورد */

@@ -1,13 +1,10 @@
 package ir.nobatdehi.driver
 
-import android.Manifest
 import android.annotation.SuppressLint
 import android.content.ActivityNotFoundException
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.net.Uri
-import android.os.Build
 import android.os.Bundle
 import android.view.View
 import android.webkit.CookieManager
@@ -19,9 +16,7 @@ import android.webkit.WebViewClient
 import android.widget.Button
 import android.widget.LinearLayout
 import androidx.activity.OnBackPressedCallback
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.content.ContextCompat
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 
 /**
@@ -44,15 +39,6 @@ class MainActivity : AppCompatActivity() {
 
     /** خطای شبکه فقط برای خودِ صفحه معنا دارد، نه برای یک تصویر یا اسکریپت */
     private var pageFailed = false
-
-    /*
-     * نتیجه‌ی پرسشِ مجوزِ اعلان.
-     *
-     * جواب هرچه باشد کاری نمی‌کنیم: «نه» یعنی راننده اعلان نمی‌خواهد و
-     * برنامه باید بدون آن هم کامل کار کند. پیامک سرِ جایش هست.
-     */
-    private val askNotifications =
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -104,10 +90,6 @@ class MainActivity : AppCompatActivity() {
             }
         })
 
-        Notifier.createChannels(this)
-        NotificationWorker.schedule(this)
-        requestNotificationPermission()
-
         if (savedInstanceState == null) {
             web.loadUrl(intent?.data?.toString()?.takeIf { insideApp(it.toUri()) } ?: startUrl())
         } else {
@@ -127,41 +109,11 @@ class MainActivity : AppCompatActivity() {
         web.saveState(outState)
     }
 
-    /*
-     * سرویس فقط از حالتِ «برنامه جلوی چشم است» می‌تواند شروع شود.
-     *
-     * اندروید ۱۲ به بعد شروعِ سرویسِ پیش‌زمینه از پس‌زمینه را ممنوع کرده و
-     * با ForegroundServiceStartNotAllowedException برنامه را می‌اندازد. پس
-     * همین‌جا، جایی که مطمئناً جلوی چشم است.
-     */
-    override fun onResume() {
-        super.onResume()
-
-        RealtimeService.start(this)
-    }
-
     override fun onPause() {
         super.onPause()
 
         // همین‌جا نوشته می‌شود، نه وقتی سیستم برنامه را کشت
         CookieManager.getInstance().flush()
-    }
-
-    /**
-     * مجوز اعلان را همان بار اول می‌پرسیم و نه بیشتر.
-     *
-     * اندروید خودش بعد از دو بار رد کردن، پرسش را برای همیشه می‌بندد؛ پس
-     * اصرارِ ما فقط سهمیه را می‌سوزاند بی‌آنکه چیزی عوض شود.
-     */
-    private fun requestNotificationPermission() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
-
-        val granted = ContextCompat.checkSelfPermission(
-            this,
-            Manifest.permission.POST_NOTIFICATIONS,
-        ) == PackageManager.PERMISSION_GRANTED
-
-        if (!granted) askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
     }
 
     private fun startUrl() = BuildConfig.SITE_URL + BuildConfig.START_PATH

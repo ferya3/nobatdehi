@@ -32,7 +32,7 @@ export interface OtpFlash {
 export interface PageProps {
     auth: { user: UserProps | null; driver: DriverProps | null };
     factory: FactoryProps | null;
-    flash: { success: string | null; error: string | null; warning: string | null; otp: OtpFlash | null };
+    flash: { success: string | null; error: string | null; otp: OtpFlash | null };
     errors: Record<string, string>;
     [key: string]: unknown;
 }

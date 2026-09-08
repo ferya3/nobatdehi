@@ -4,20 +4,6 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
-    <!--
-        اندروید ۱۳ به بعد اعلان را مجوزِ زمانِ اجرا کرده. روی نسخه‌های
-        قدیمی‌تر همین سطر بی‌اثر است و اعلان بدون پرسش کار می‌کند.
-    -->
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-
-    <!--
-        اتصال دائم فقط داخل سرویسِ پیش‌زمینه زنده می‌ماند؛ هر اتصالی که
-        برنامه در پس‌زمینه باز نگه دارد، اندروید ظرف چند دقیقه می‌بندد.
-    -->
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-
     <application
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
@@ -53,29 +39,6 @@
                 <data android:scheme="https" android:host="${siteHost}" android:pathPrefix="${startPath}" />
             </intent-filter>
         </activity>
-
-        <!--
-            specialUse و نه dataSync: این سرویس چیزی همگام نمی‌کند، یک
-            اتصالِ باز نگه می‌دارد تا خبرِ نوبت همان لحظه برسد. اندروید ۱۵
-            سهمیه‌ی روزانه‌ی dataSync را محدود کرده و راننده‌ای که ده ساعت
-            در صف است، از آن سهمیه رد می‌شود.
-        -->
-        <service
-            android:name=".RealtimeService"
-            android:exported="false"
-            android:foregroundServiceType="specialUse">
-            <property
-                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="اتصال دائم به صف بارگیری برای اعلان لحظه‌ای نوبت" />
-        </service>
-
-        <receiver
-            android:name=".BootReceiver"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="android.intent.action.BOOT_COMPLETED" />
-            </intent-filter>
-        </receiver>
     </application>
 
     <!-- برای باز کردن شماره‌گیر و پیامک از داخل صفحه -->
