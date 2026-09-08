@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AreaChart from '@/components/AreaChart.vue';
 import BarChart from '@/components/BarChart.vue';
 import StatCard from '@/components/StatCard.vue';
 import StaffLayout from '@/layouts/StaffLayout.vue';
@@ -108,14 +109,15 @@ function pick(range: string) {
             </div>
 
             <div class="grid gap-5 lg:grid-cols-2">
+                <!-- روز یک روند است و ساعت یک مقایسه؛ دو کار متفاوت، دو شکل متفاوت -->
                 <section class="card p-5">
                     <h2 class="mb-4 text-sm font-semibold text-slate-700">نوبت به تفکیک روز</h2>
-                    <BarChart :data="dailyChart" />
+                    <AreaChart :data="dailyChart" unit="نوبت" />
                 </section>
 
                 <section class="card p-5">
                     <h2 class="mb-4 text-sm font-semibold text-slate-700">شلوغ‌ترین ساعات</h2>
-                    <BarChart :data="hourChart" />
+                    <BarChart :data="hourChart" unit="نوبت" />
                 </section>
             </div>
 

@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import BarChart from '@/components/BarChart.vue';
+import AreaChart from '@/components/AreaChart.vue';
 import PlateBadge from '@/components/PlateBadge.vue';
+import ShareBar from '@/components/ShareBar.vue';
 import StatusBadge from '@/components/StatusBadge.vue';
 import StaffLayout from '@/layouts/StaffLayout.vue';
 import { duration } from '@/lib/format';
@@ -68,6 +69,8 @@ const weekChart = computed(() =>
 );
 
 const busyLines = computed(() => props.lines.filter((line) => line.busy).length);
+
+const productShare = computed(() => props.week.byProduct.map((row) => ({ name: row.name, value: row.tons })));
 
 /**
  * کامیونی که روی لاین است ولی لاینش ثبت نشده.
@@ -177,70 +180,72 @@ watch(connected, (isLive) => {
 <template>
     <StaffLayout title="داشبورد">
         <div class="space-y-6">
-            <div class="flex flex-wrap items-end justify-between gap-3">
-                <div>
-                    <h1 class="text-lg font-bold text-slate-900">وضعیت بارگیری امروز</h1>
-                    <p class="mt-0.5 text-sm text-slate-500">{{ jalaliDate }}</p>
-                </div>
-
-                <div class="flex items-center gap-2">
-                    <!-- سه ایستگاهی که مدیر بیشتر از همه سراغشان می‌رود -->
-                    <div class="hidden items-center gap-1 rounded-xl border border-slate-200 bg-white p-1 sm:flex">
-                        <Link
-                            v-for="shortcut in shortcuts"
-                            :key="shortcut.href"
-                            :href="shortcut.href"
-                            class="rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
-                        >
-                            {{ shortcut.label }}
-                        </Link>
+            <!--
+                سربرگِ تیره.
+                عنوان و سه عددِ روز و نوار پیشرفت، همه در یک بلوک — تا نگاهِ
+                اول یک‌جا جواب بگیرد و بعد چشم به جزئیات برود.
+            -->
+            <section class="overflow-hidden rounded-2xl bg-gradient-to-bl from-brand-800 via-brand-700 to-brand-600 shadow-lg shadow-brand-900/10">
+                <div class="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-5 py-3.5">
+                    <div>
+                        <h1 class="text-base font-bold text-white">وضعیت بارگیری امروز</h1>
+                        <p class="mt-0.5 text-xs text-brand-100/80">{{ jalaliDate }}</p>
                     </div>
 
-                    <span
-                        v-if="canSeeQueue"
-                        :title="connected ? 'به‌روزرسانی زنده برقرار است' : 'اتصال زنده برقرار نیست؛ هر ۳۰ ثانیه تازه می‌شود'"
-                        :class="[
-                            'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium',
-                            connected ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-800',
-                        ]"
-                    >
+                    <div class="flex items-center gap-2">
+                        <div class="hidden items-center gap-1 rounded-xl bg-white/10 p-1 sm:flex">
+                            <Link
+                                v-for="shortcut in shortcuts"
+                                :key="shortcut.href"
+                                :href="shortcut.href"
+                                class="rounded-lg px-2.5 py-1.5 text-xs font-medium text-brand-50 transition hover:bg-white/15"
+                            >
+                                {{ shortcut.label }}
+                            </Link>
+                        </div>
+
                         <span
-                            :class="['size-2 rounded-full', connected ? 'animate-pulse bg-emerald-500' : 'bg-amber-500']"
-                            aria-hidden="true"
-                        />
-                        {{ connected ? 'زنده' : 'هر ۳۰ ثانیه' }}
-                    </span>
+                            v-if="canSeeQueue"
+                            :title="connected ? 'به‌روزرسانی زنده برقرار است' : 'اتصال زنده برقرار نیست؛ هر ۳۰ ثانیه تازه می‌شود'"
+                            :class="[
+                                'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium',
+                                connected ? 'bg-emerald-400/20 text-emerald-100' : 'bg-amber-400/20 text-amber-100',
+                            ]"
+                        >
+                            <span
+                                :class="['size-2 rounded-full', connected ? 'animate-pulse bg-emerald-300' : 'bg-amber-300']"
+                                aria-hidden="true"
+                            />
+                            {{ connected ? 'زنده' : 'هر ۳۰ ثانیه' }}
+                        </span>
+                    </div>
                 </div>
-            </div>
 
-            <!--
-                کارتِ سرصفحه: سه عددی که مدیر صبح می‌خواهد بداند.
-
-                کل روز، چقدرش تمام شده، و همین حالا چند کامیون داخل محوطه است.
-                نوار پیشرفت همان نسبت را بدون خواندن عدد نشان می‌دهد.
-            -->
-            <section class="card overflow-hidden bg-gradient-to-bl from-brand-600 via-brand-600 to-brand-700 text-white">
                 <div class="grid gap-px sm:grid-cols-3">
                     <div class="px-6 py-6 text-center">
-                        <p class="num text-5xl font-bold tracking-tight">{{ counters.total }}</p>
-                        <p class="mt-1.5 text-sm text-brand-100">کامیون امروز</p>
+                        <p class="num text-5xl font-bold tracking-tight text-white">{{ counters.total }}</p>
+                        <p class="mt-1.5 text-sm text-brand-100/90">کامیون امروز</p>
                     </div>
-                    <div class="border-t border-white/15 px-6 py-6 text-center sm:border-s sm:border-t-0">
-                        <p class="num text-5xl font-bold tracking-tight">{{ done }}</p>
-                        <p class="mt-1.5 text-sm text-brand-100">تکمیل‌شده</p>
+                    <div class="border-t border-white/10 px-6 py-6 text-center sm:border-s sm:border-t-0">
+                        <p class="num text-5xl font-bold tracking-tight text-white">{{ done }}</p>
+                        <p class="mt-1.5 text-sm text-brand-100/90">تکمیل‌شده</p>
                     </div>
-                    <div class="border-t border-white/15 px-6 py-6 text-center sm:border-s sm:border-t-0">
-                        <p class="num text-5xl font-bold tracking-tight">{{ onSite }}</p>
-                        <p class="mt-1.5 text-sm text-brand-100">همین حالا در محوطه</p>
+                    <div class="border-t border-white/10 px-6 py-6 text-center sm:border-s sm:border-t-0">
+                        <p class="num text-5xl font-bold tracking-tight text-white">{{ onSite }}</p>
+                        <p class="mt-1.5 text-sm text-brand-100/90">همین حالا در محوطه</p>
                     </div>
                 </div>
 
+                <!-- سنجه‌ی نسبت به سقفِ روز؛ عدد کنارش می‌آید چون نوار به‌تنهایی خوانده نمی‌شود -->
                 <div class="px-6 pb-5">
-                    <div class="h-1.5 overflow-hidden rounded-full bg-white/20">
-                        <div class="h-full rounded-full bg-white transition-all duration-500" :style="{ width: `${progress}%` }" />
+                    <div class="h-2 overflow-hidden rounded-full bg-white/15">
+                        <div
+                            class="h-full rounded-full bg-emerald-300 transition-all duration-700"
+                            :style="{ width: `${progress}%` }"
+                        />
                     </div>
-                    <p class="mt-2 text-center text-xs text-brand-100">
-                        <span class="num">٪{{ progress }}</span>
+                    <p class="mt-2 text-center text-xs text-brand-100/80">
+                        <span class="num font-semibold text-white">٪{{ progress }}</span>
                         از نوبت‌های امروز تکمیل شده
                     </p>
                 </div>
@@ -515,7 +520,7 @@ watch(connected, (isLive) => {
             <div class="grid gap-5 lg:grid-cols-3">
                 <section class="card p-5 lg:col-span-2">
                     <h2 class="mb-4 text-sm font-semibold text-slate-700">ورود کامیون در ۷ روز اخیر</h2>
-                    <BarChart :data="weekChart" />
+                    <AreaChart :data="weekChart" unit="کامیون" />
                 </section>
 
                 <section class="card space-y-4 p-5">
@@ -552,29 +557,39 @@ watch(connected, (isLive) => {
                 </section>
             </div>
 
-            <section v-if="week.byProduct.length" class="card overflow-hidden">
-                <h2 class="border-b border-slate-100 px-5 py-3 text-sm font-semibold text-slate-700">
-                    محصولات هفته
-                </h2>
-                <table class="w-full text-sm">
-                    <thead class="bg-slate-50 text-xs text-slate-500">
-                        <tr>
-                            <th class="px-5 py-2 text-start font-medium">محصول</th>
-                            <th class="px-5 py-2 text-start font-medium">نوبت</th>
-                            <th class="px-5 py-2 text-start font-medium">تکمیل‌شده</th>
-                            <th class="px-5 py-2 text-start font-medium">تناژ</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-100">
-                        <tr v-for="row in week.byProduct" :key="row.name">
-                            <td class="px-5 py-2.5 text-slate-800">{{ row.name }}</td>
-                            <td class="num px-5 py-2.5 text-slate-700">{{ row.total }}</td>
-                            <td class="num px-5 py-2.5 text-slate-700">{{ row.completed }}</td>
-                            <td class="num px-5 py-2.5 text-slate-700">{{ row.tons }}</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </section>
+            <div v-if="week.byProduct.length" class="grid gap-5 lg:grid-cols-3">
+                <section class="card p-5">
+                    <h2 class="mb-4 text-sm font-semibold text-slate-700">سهم محصولات از تناژ هفته</h2>
+                    <ShareBar :data="productShare" unit="تن" />
+                </section>
+
+                <section class="card overflow-hidden lg:col-span-2">
+                    <h2 class="border-b border-slate-100 px-5 py-3 text-sm font-semibold text-slate-700">
+                        محصولات هفته
+                    </h2>
+                    <div class="overflow-x-auto">
+                        <table class="w-full min-w-[28rem] text-sm">
+                            <thead class="bg-slate-50 text-xs text-slate-500">
+                                <tr>
+                                    <th class="px-5 py-2 text-start font-medium">محصول</th>
+                                    <th class="px-5 py-2 text-start font-medium">نوبت</th>
+                                    <th class="px-5 py-2 text-start font-medium">تکمیل‌شده</th>
+                                    <th class="px-5 py-2 text-start font-medium">تناژ</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                                <tr v-for="row in week.byProduct" :key="row.name" class="transition hover:bg-slate-50/60">
+                                    <td class="px-5 py-2.5 text-slate-800">{{ row.name }}</td>
+                                    <td class="num px-5 py-2.5 text-slate-700">{{ row.total }}</td>
+                                    <td class="num px-5 py-2.5 text-slate-700">{{ row.completed }}</td>
+                                    <td class="num px-5 py-2.5 text-slate-700">{{ row.tons }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            </div>
+
         </div>
     </StaffLayout>
 </template>
