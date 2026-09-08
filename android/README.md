@@ -31,9 +31,27 @@ Android SDK را می‌آورد و لازم نیست چیزی دستی نصب �
 ۳. اولین بار چند دقیقه طول می‌کشد تا وابستگی‌ها را بگیرد. اگر گیر کرد،
    احتمالاً تحریم‌شکن روشن نیست.
 
-۴. منوی **Build ← Build Bundle(s) / APK(s) ← Build APK(s)**.
+۴. حالا بسازید. **مطمئن‌ترین راه، ترمینالِ خودِ Android Studio است** —
+   چون به اسم منو کار ندارد و از Java و SDK خودِ Android Studio استفاده
+   می‌کند:
 
-۵. وقتی تمام شد، روی **locate** در پیام پایین صفحه بزنید. فایل اینجاست:
+   **View ← Tool Windows ← Terminal** (یا `Alt`+`F12`)، بعد:
+
+   ```
+   gradlew.bat assembleDebug
+   ```
+
+   اگر ترجیح می‌دهید از منو بزنید، جای گزینه بین نسخه‌ها فرق دارد:
+
+   | نسخه‌ی Android Studio | مسیر منو |
+   |---|---|
+   | Ladybug (۲۰۲۴.۲) و جدیدتر | **Build ← Generate App Bundles or APKs ← Generate APKs** |
+   | قدیمی‌تر | **Build ← Build Bundle(s) / APK(s) ← Build APK(s)** |
+
+   اگر منوی Build تقریباً خالی است، یعنی Gradle sync هنوز تمام نشده یا
+   خطا خورده — تا آن موفق نشود این گزینه‌ها ساخته نمی‌شوند.
+
+۵. خروجی اینجاست:
 
 ```
 android\app\build\outputs\apk\debug\app-debug.apk
