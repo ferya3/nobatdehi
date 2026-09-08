@@ -12,6 +12,15 @@ import { computed, ref } from 'vue';
 
 const props = defineProps<{ otp: OtpFlash }>();
 
+/**
+ * طول کد از سرور می‌آید.
+ *
+ * قبلاً اینجا عدد ۵ نوشته شده بود در حالی که سرور کد شش‌رقمی می‌ساخت —
+ * راننده کد را می‌گرفت ولی فرم فقط پنج خانه داشت و ورود اصلاً ممکن نبود.
+ * پیش‌فرض ۶ فقط برای نشست‌های قدیمی است که این کلید را ندارند.
+ */
+const codeLength = computed(() => props.otp.length ?? 6);
+
 const form = useForm({ mobile: props.otp.mobile, code: '' });
 const resending = ref(false);
 
@@ -63,7 +72,7 @@ function resend() {
                 <FormField :error="form.errors.code">
                     <OtpInput
                         v-model="form.code"
-                        :length="5"
+                        :length="codeLength"
                         :invalid="!!form.errors.code"
                         @complete="submit"
                     />
@@ -76,7 +85,7 @@ function resend() {
                     کد منقضی شده است. لطفاً کد جدید بگیرید.
                 </p>
 
-                <AppButton type="submit" size="lg" :loading="form.processing" :disabled="form.code.length < 5">
+                <AppButton type="submit" size="lg" :loading="form.processing" :disabled="form.code.length < codeLength">
                     ورود
                 </AppButton>
 

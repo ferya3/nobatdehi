@@ -20,6 +20,7 @@ use App\Models\SmsMessage;
 use App\Models\Truck;
 use App\Models\TruckType;
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Database\Seeders\SmsTemplateSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\Test;
@@ -41,6 +42,13 @@ final class NextInLineNoticeTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        // ۰۸:۰۰ یک روز کاری.
+        //
+        // بدون ثابت‌کردن ساعت، این تست بعدازظهرها می‌شکست: کامیون دوم دیگر
+        // تا ساعت تعطیلی جا نمی‌شد و روی فردا می‌رفت، پس «نفر بعدیِ همان
+        // روز» وجود نداشت. رفتار درست بود؛ تست ناپایدار بود.
+        $this->travelTo(CarbonImmutable::parse('2026-09-07 08:00', 'Asia/Tehran'));
 
         $this->factory = $this->seedFactory();
         $this->factory->update(['loading_lines' => 1]);

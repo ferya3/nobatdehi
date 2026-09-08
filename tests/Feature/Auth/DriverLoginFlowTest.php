@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Auth;
 
 use App\Models\Driver;
+use Database\Seeders\SmsTemplateSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia;
 use PHPUnit\Framework\Attributes\Test;
@@ -17,7 +18,7 @@ final class DriverLoginFlowTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->seed(\Database\Seeders\SmsTemplateSeeder::class);
+        $this->seed(SmsTemplateSeeder::class);
         config()->set('otp.expose_in_response', true);
     }
 
@@ -38,6 +39,32 @@ final class DriverLoginFlowTest extends TestCase
             ->assertRedirect(route('driver.home'));
 
         $this->assertAuthenticatedAs(Driver::firstOrFail(), 'driver');
+    }
+
+    /**
+     * فرم باید همان تعداد رقمی را بخواهد که پیامک می‌فرستد.
+     *
+     * روی سرور واقعی این دو از هم جدا افتاده بودند: سرور کد شش‌رقمی
+     * می‌ساخت و فرم پنج خانه داشت — یعنی هیچ راننده‌ای نمی‌توانست وارد شود
+     * و هیچ خطایی هم جایی دیده نمی‌شد.
+     */
+    #[Test]
+    public function the_form_asks_for_exactly_as_many_digits_as_the_sms_carries(): void
+    {
+        foreach ([5, 6] as $length) {
+            config()->set('otp.length', $length);
+
+            $response = $this->post(route('driver.otp.request'), ['mobile' => '0912345678'.$length]);
+            $code = $response->getSession()->get('otp')['dev_code'];
+
+            $this->assertSame($length, mb_strlen((string) $code), 'طول کدِ ساخته‌شده');
+
+            $this->followingRedirects()
+                ->get(route('driver.otp.verify.show'))
+                ->assertInertia(fn (AssertableInertia $page) => $page
+                    ->component('Driver/Auth/Verify')
+                    ->where('otp.length', $length));
+        }
     }
 
     #[Test]

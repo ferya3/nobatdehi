@@ -44,6 +44,11 @@ class OtpController extends Controller
                 'resend_in' => $result['resend_in'],
                 'expires_in' => $result['expires_in'],
                 'dev_code' => $result['code'],
+
+                // طول کد از سرور می‌آید و نه از یک عدد ثابت در Vue.
+                // با عدد ثابت، تغییر OTP_LENGTH فرم را بی‌صدا خراب می‌کرد:
+                // راننده کد شش‌رقمی می‌گرفت و فرم فقط پنج خانه داشت.
+                'length' => (int) config('otp.length'),
             ]);
     }
 
@@ -57,6 +62,10 @@ class OtpController extends Controller
 
         // تازه‌سازی شمارنده در رفرش صفحه
         $otp['resend_in'] = $this->otp->secondsUntilResend($otp['mobile']);
+
+        // نشست‌های قدیمی این کلید را ندارند؛ بدون این، رفرشِ صفحه
+        // فرم را بدون خانه رها می‌کرد
+        $otp['length'] = (int) ($otp['length'] ?? config('otp.length'));
         $request->session()->keep('otp');
         $request->session()->flash('otp', $otp);
 

@@ -25,6 +25,8 @@ export interface OtpFlash {
     resend_in: number;
     expires_in: number;
     dev_code: string | null;
+    /** تعداد رقم‌های کد — از config('otp.length') سرور می‌آید */
+    length?: number;
 }
 
 export interface PageProps {
