@@ -99,6 +99,84 @@ else
     as_app "git --no-pager log --oneline '${BEFORE}..${AFTER}'" | sed 's/^/      /'
 fi
 
+# --------------------------------------------------- پیش‌فرض‌های امنیتی .env
+
+# update.sh تا امروز به .env دست نمی‌زد و منطقی هم بود: رمز دیتابیس و کلیدهای
+# Reverb آنجاست و بازنویسی‌شان یعنی خرابی. ولی نتیجه‌اش این شد که سرورهایی که
+# پیش از سخت‌سازی امنیتی نصب شده بودند، هرگز آن تنظیمات را نگرفتند — روی یک
+# نصب واقعی دیده شد که SESSION_ENCRYPT هنوز false بود و Reverb روی 0.0.0.0.
+#
+# پس فقط همان چند کلیدِ امنیتی بررسی می‌شوند و بس. هیچ رمز و کلیدی دست
+# نمی‌خورد و هر تغییری بلند گزارش می‌شود.
+
+step "بررسی تنظیمات امنیتی .env"
+
+env_get() {
+    grep -m1 -E "^${1}=" "$APP_DIR/.env" 2>/dev/null | cut -d= -f2- | tr -d "\"'" || true
+}
+
+env_set() {
+    python3 - "$APP_DIR/.env" "$1" "$2" <<'ENVPY'
+import sys, pathlib
+path, key, value = sys.argv[1], sys.argv[2], sys.argv[3]
+p = pathlib.Path(path)
+out, written = [], False
+for line in p.read_text().splitlines():
+    if line.startswith(f'{key}='):
+        if not written:
+            out.append(f'{key}={value}')
+            written = True
+        continue
+    out.append(line)
+if not written:
+    out.append(f'{key}={value}')
+p.write_text('\n'.join(out) + '\n')
+ENVPY
+}
+
+ENV_CHANGED="no"
+
+repair() {
+    local key="$1" want="$2" why="$3" current
+    current="$(env_get "$key")"
+
+    if [[ "$current" == "$want" ]]; then
+        return 0
+    fi
+
+    env_set "$key" "$want"
+    ENV_CHANGED="yes"
+    warn "${key}: «${current:-تعریف‌نشده}» → «${want}»  (${why})"
+}
+
+repair APP_DEBUG false "روی production، صفحه‌ی خطا مسیر فایل‌ها و رمز دیتابیس را لو می‌دهد"
+repair OTP_EXPOSE_IN_RESPONSE false "وگرنه کد ورود در پاسخ HTTP برمی‌گردد و هرکس با شماره‌ی دیگران وارد می‌شود"
+repair REVERB_SERVER_HOST 127.0.0.1 "Reverb باید از پشت Nginx سرو شود، نه مستقیم روی شبکه"
+
+# نشستِ رمزنگاری‌نشده در Redis قابل خواندن است. عوض‌کردنش همه را logout
+# می‌کند، پس جداگانه و با پیام صریح.
+if [[ "$(env_get SESSION_ENCRYPT)" != "true" ]]; then
+    env_set SESSION_ENCRYPT true
+    ENV_CHANGED="yes"
+    warn "SESSION_ENCRYPT روشن شد — همه‌ی کاربران یک بار باید دوباره وارد شوند."
+fi
+
+# فقط وقتی اصلاً تعریف نشده باشد. اگر مقداری دارد، ممکن است رنج‌های
+# Cloudflare باشد و بازنویسی‌اش یعنی خراب‌کردن چیزی که درست بوده.
+if [[ -z "$(env_get TRUSTED_PROXIES)" ]]; then
+    env_set TRUSTED_PROXIES "127.0.0.1,::1"
+    ENV_CHANGED="yes"
+    warn "TRUSTED_PROXIES تعریف نشده بود؛ روی همین ماشین تنظیم شد."
+    warn "پشت Cloudflare این کافی نیست — set-domain.sh رنج‌های آن‌ها را اضافه می‌کند."
+fi
+
+if [[ "$ENV_CHANGED" == "yes" ]]; then
+    chown "$APP_USER:$APP_USER" "$APP_DIR/.env"
+    chmod 640 "$APP_DIR/.env"
+else
+    ok "تنظیمات امنیتی .env درست بود."
+fi
+
 # ------------------------------------------------------------ وابستگی‌ها
 
 step "نصب وابستگی‌های PHP"

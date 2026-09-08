@@ -623,9 +623,11 @@ ${LISTEN_V6}
 
     client_max_body_size 20m;
 
-    add_header X-Frame-Options "SAMEORIGIN" always;
-    add_header X-Content-Type-Options "nosniff" always;
-    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    # هدرهای امنیتی از PHP می‌آیند (App\Http\Middleware\SecurityHeaders).
+    #
+    # تکرارشان اینجا باعث می‌شد مرورگر دو X-Frame-Options متناقض بگیرد —
+    # DENY از Laravel و SAMEORIGIN از اینجا — و آن‌که سست‌تر است برنده شود.
+    # یک منبع، آن هم جایی که تست دارد.
 
     location = /favicon.ico { access_log off; log_not_found off; }
     location = /robots.txt  { access_log off; log_not_found off; }
