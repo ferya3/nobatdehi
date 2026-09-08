@@ -78,6 +78,58 @@
     }
 }
 
+/*
+ * انیمیشن‌های خانه‌ی کد.
+ *
+ * با CSS و نه یک کتابخانه‌ی انیمیشن: CSP این پروژه فقط اسکریپتِ خودِ دامنه
+ * را اجرا می‌کند، و مهم‌تر اینکه راننده این صفحه را روی اینترنت موبایل باز
+ * می‌کند — چند کیلوبایت اضافه برای یک لرزش، معامله‌ی بدی است.
+ */
+@keyframes otp-pop {
+    from {
+        opacity: 0;
+        transform: translateY(0.4rem) scale(0.96);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+@keyframes otp-shake {
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(-5px); }
+    40% { transform: translateX(4px); }
+    60% { transform: translateX(-3px); }
+    80% { transform: translateX(2px); }
+}
+
+@keyframes otp-caret {
+    0%, 45% { opacity: 1; }
+    55%, 100% { opacity: 0; }
+}
+
+@utility otp-pop {
+    animation: otp-pop 0.22s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+@utility otp-shake {
+    animation: otp-shake 0.32s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+@utility otp-caret {
+    animation: otp-caret 1.06s steps(1, end) infinite;
+}
+
+/* کسی که حرکت را کم کرده، نباید لرزش و چشمک ببیند */
+@media (prefers-reduced-motion: reduce) {
+    .otp-pop,
+    .otp-shake,
+    .otp-caret {
+        animation: none;
+    }
+}
+
 @utility card {
     @apply rounded-2xl border border-slate-200/70 bg-white shadow-sm transition-shadow;
 }

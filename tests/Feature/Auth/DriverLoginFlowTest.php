@@ -67,6 +67,36 @@ final class DriverLoginFlowTest extends TestCase
         }
     }
 
+    /**
+     * یک رقمِ اشتباه نباید راننده را از صفحه بیرون بیندازد.
+     *
+     * otp یک flash بود و بعد از درخواستِ ناموفق پاک می‌شد؛ نتیجه این بود
+     * که راننده به صفحه‌ی ورود برمی‌گشت و باید کد تازه می‌گرفت — با اینکه
+     * مهلت تلاش مجدد وجود داشت و هنوز تمام نشده بود.
+     */
+    #[Test]
+    public function a_wrong_code_keeps_the_driver_on_the_verify_page(): void
+    {
+        $response = $this->post(route('driver.otp.request'), ['mobile' => '09123456789']);
+        $code = $response->getSession()->get('otp')['dev_code'];
+
+        $this->from(route('driver.otp.verify.show'))
+            ->post(route('driver.otp.verify'), ['mobile' => '09123456789', 'code' => '000000'])
+            ->assertRedirect(route('driver.otp.verify.show'))
+            ->assertSessionHasErrors('code');
+
+        // و صفحه هنوز باز می‌شود، نه اینکه به ورود پرت شود
+        $this->get(route('driver.otp.verify.show'))
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page->component('Driver/Auth/Verify'));
+
+        // کدِ درست هنوز کار می‌کند — تلاشِ اشتباه آن را نسوزانده
+        $this->post(route('driver.otp.verify'), ['mobile' => '09123456789', 'code' => $code])
+            ->assertRedirect(route('driver.home'));
+
+        $this->assertAuthenticatedAs(Driver::firstOrFail(), 'driver');
+    }
+
     #[Test]
     public function a_returning_driver_can_log_in_again(): void
     {

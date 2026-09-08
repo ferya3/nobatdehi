@@ -77,6 +77,16 @@ class OtpController extends Controller
         try {
             $driver = $this->otp->verify($request->mobile(), $request->string('code')->toString(), $request);
         } catch (OtpException $e) {
+            /*
+             * صفحه‌ی تأیید باید سرِ جایش بماند.
+             *
+             * otp یک flash است و بعد از این درخواست پاک می‌شود. بدون
+             * نگه‌داشتنش، یک رقمِ اشتباه راننده را به صفحه‌ی ورود پرت
+             * می‌کرد و باید از اول کد می‌گرفت — با اینکه مهلت تلاش مجدد
+             * وجود دارد و هنوز تمام نشده بود.
+             */
+            $this->keepVerifyPage($request);
+
             throw ValidationException::withMessages(['code' => $e->getMessage()]);
         }
 
@@ -84,6 +94,26 @@ class OtpController extends Controller
         $request->session()->regenerate();
 
         return redirect()->intended(route('driver.home'));
+    }
+
+    /**
+     * داده‌ی صفحه‌ی تأیید را برای درخواست بعدی نگه می‌دارد.
+     *
+     * شمارنده‌ها دوباره حساب می‌شوند و نه از مقدار کهنه: راننده‌ای که
+     * سی ثانیه با کد کلنجار رفته، نباید «۶۰ ثانیه تا ارسال مجدد» ببیند.
+     */
+    private function keepVerifyPage(Request $request): void
+    {
+        $otp = $request->session()->get('otp');
+
+        if (! is_array($otp) || ! isset($otp['mobile'])) {
+            return;
+        }
+
+        $otp['resend_in'] = $this->otp->secondsUntilResend($otp['mobile']);
+        $otp['length'] = (int) ($otp['length'] ?? config('otp.length'));
+
+        $request->session()->flash('otp', $otp);
     }
 
     public function resend(RequestOtpRequest $request): RedirectResponse
