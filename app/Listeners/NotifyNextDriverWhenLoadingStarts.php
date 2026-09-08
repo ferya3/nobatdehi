@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Listeners;
 
 use App\Domain\Appointment\Enums\AppointmentStatus;
+use App\Domain\Notification\DriverNotifier;
 use App\Domain\Queue\QueueService;
 use App\Domain\Sms\SmsService;
 use App\Events\AppointmentTransitioned;
@@ -32,6 +33,7 @@ class NotifyNextDriverWhenLoadingStarts implements ShouldQueue
     public function __construct(
         private readonly SmsService $sms,
         private readonly QueueService $queue,
+        private readonly DriverNotifier $notifier,
     ) {}
 
     public function handle(AppointmentTransitioned $event): void
@@ -77,6 +79,23 @@ class NotifyNextDriverWhenLoadingStarts implements ShouldQueue
             'at' => Digits::toPersian(now()->addMinutes($minutes)->format('H:i')),
             'factory' => $next->factory?->name ?? '',
         ], $next);
+
+        /*
+         * همان خبر، روی برنامه‌ی اندروید.
+         *
+         * پیامک می‌رسد و باید برسد؛ این اضافه است و نه جایگزین. راننده‌ای که
+         * برنامه را باز دارد، متن کامل و لینکِ نوبتش را هم دارد.
+         */
+        $this->notifier->send(
+            driver: $next->driver,
+            title: 'نوبت شما نزدیک است',
+            body: sprintf(
+                'نوبت جلوتر از شما شروع به بارگیری کرد. تا حدود %s دیگر نوبت شماست.',
+                Duration::human($minutes),
+            ),
+            path: '/queue/appointments/'.$next->ulid,
+            kind: 'next-up',
+        );
 
         $next->forceFill(['next_up_notified_at' => now()])->save();
     }

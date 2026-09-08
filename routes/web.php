@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Driver\AppointmentController;
 use App\Http\Controllers\Driver\BookingController;
+use App\Http\Controllers\Driver\NotificationController as DriverNotificationController;
 use App\Http\Controllers\Driver\OtpController;
 use App\Http\Controllers\Staff\Catalog\ProductController;
 use App\Http\Controllers\Staff\Catalog\TruckTypeController;
@@ -11,6 +12,7 @@ use App\Http\Controllers\Staff\GateController;
 use App\Http\Controllers\Staff\HomeController;
 use App\Http\Controllers\Staff\LoadingController;
 use App\Http\Controllers\Staff\LoginController;
+use App\Http\Controllers\Staff\NotificationController;
 use App\Http\Controllers\Staff\PasswordController;
 use App\Http\Controllers\Staff\QueueController;
 use App\Http\Controllers\Staff\ReportController;
@@ -56,6 +58,17 @@ Route::prefix('queue')->name('driver.')->group(function () {
             ->name('appointments.cancel');
 
         Route::post('/logout', [OtpController::class, 'logout'])->name('logout');
+
+        /*
+         * برنامه‌ی اندروید — JSON خام و نه Inertia.
+         *
+         * راهِ push واقعی (Firebase) از ایران در دسترس نیست، پس برنامه خودش
+         * هر چند دقیقه سر می‌زند. همان کوکیِ نشست، همان راننده.
+         */
+        Route::get('/api/notifications', [DriverNotificationController::class, 'index'])
+            ->name('api.notifications');
+        Route::post('/api/notifications/ack', [DriverNotificationController::class, 'acknowledge'])
+            ->name('api.notifications.ack');
     });
 });
 
@@ -131,6 +144,9 @@ Route::prefix('panel')->name('staff.')->group(function () {
         Route::post('/truck-types', [TruckTypeController::class, 'store'])->name('truck-types.store');
         Route::put('/truck-types/{truckType}', [TruckTypeController::class, 'update'])->name('truck-types.update');
         Route::delete('/truck-types/{truckType}', [TruckTypeController::class, 'destroy'])->name('truck-types.destroy');
+
+        Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
+        Route::post('/notifications', [NotificationController::class, 'store'])->name('notifications.store');
 
         Route::get('/settings', [SettingsController::class, 'edit'])->name('settings.edit');
         Route::put('/settings', [SettingsController::class, 'update'])->name('settings.update');

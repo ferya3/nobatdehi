@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    آیکن کوچکِ نوار اعلان.
+
+    اندروید این آیکن را یک ماسک می‌بیند: هرچه غیرشفاف باشد سفید کشیده
+    می‌شود و رنگ نادیده گرفته می‌شود. پس فقط سیلوئتِ کامیون، بدون جزئیاتِ
+    ریز که در ۲۴dp به لکه تبدیل می‌شوند.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="#FFFFFF">
+
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M3,6h9v8H3V6zM13,9h3.5l2.5,3v2h-6V9zM7,19a2,2 0 1,1 0,-4 2,2 0 0,1 0,4zM17,19a2,2 0 1,1 0,-4 2,2 0 0,1 0,4z" />
+</vector>

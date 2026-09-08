@@ -45,6 +45,9 @@ final class Roles
             P::QUEUE_START_LOADING, P::QUEUE_COMPLETE_LOADING, P::QUEUE_NO_SHOW,
             P::APPOINTMENTS_VIEW, P::APPOINTMENTS_CANCEL, P::APPOINTMENTS_CREATE,
             P::DASHBOARD_VIEW,
+            // اپراتور صف را اداره می‌کند؛ «بارگیری یک ساعت متوقف است» خبری
+            // است که همان لحظه باید برسد و نباید منتظر مدیر بماند.
+            P::NOTIFICATIONS_SEND,
         ];
 
         return [

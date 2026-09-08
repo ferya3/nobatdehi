@@ -42,6 +42,9 @@ final class Permissions
     public const USERS_MANAGE = 'users.manage';
     public const ROLES_MANAGE = 'roles.manage';
 
+    /** ارسال اعلان به گوشی راننده‌ها */
+    public const NOTIFICATIONS_SEND = 'notifications.send';
+
     public const AUDIT_VIEW = 'audit.view';
     public const SECURITY_LOGS_VIEW = 'security-logs.view';
 
@@ -73,6 +76,8 @@ final class Permissions
             self::PRODUCTS_MANAGE => 'مدیریت محصولات و لاین‌ها',
             self::USERS_MANAGE => 'مدیریت کاربران',
             self::ROLES_MANAGE => 'مدیریت نقش‌ها و دسترسی‌ها',
+
+            self::NOTIFICATIONS_SEND => 'ارسال اعلان به راننده‌ها',
 
             self::AUDIT_VIEW => 'مشاهده Audit Log',
             self::SECURITY_LOGS_VIEW => 'مشاهده لاگ امنیتی',

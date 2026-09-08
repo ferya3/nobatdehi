@@ -84,4 +84,13 @@ dependencies {
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0")
     implementation("androidx.webkit:webkit:1.12.1")
+
+    /*
+     * بررسی دوره‌ای اعلان‌ها.
+     *
+     * WorkManager و نه Service یا AlarmManager: تنها راهی که اندروید بعد از
+     * ری‌استارت گوشی و زیر Doze هم اجرایش می‌کند، بی‌آنکه برنامه لازم باشد
+     * یک اعلانِ دائمیِ «در حال اجرا» روی نوار بگذارد.
+     */
+    implementation("androidx.work:work-runtime-ktx:2.9.1")
 }
