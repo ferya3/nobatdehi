@@ -6,8 +6,8 @@ use App\Http\Controllers\Driver\OtpController;
 use App\Http\Controllers\Staff\Catalog\ProductController;
 use App\Http\Controllers\Staff\Catalog\TruckTypeController;
 use App\Http\Controllers\Staff\DashboardController;
-use App\Http\Controllers\Staff\GateController;
 use App\Http\Controllers\Staff\DeviceSettingsController;
+use App\Http\Controllers\Staff\GateController;
 use App\Http\Controllers\Staff\HomeController;
 use App\Http\Controllers\Staff\LoadingController;
 use App\Http\Controllers\Staff\LoginController;
@@ -146,5 +146,32 @@ Route::prefix('panel')->name('staff.')->group(function () {
         Route::post('/settings/sms/probe', [SmsSettingsController::class, 'probe'])->name('settings.sms.probe');
     });
 });
+
+/*
+ * پیوندِ دامنه به برنامه‌ی اندروید.
+ *
+ * وقتی این فایل روی دامنه باشد و اثر انگشتِ کلیدِ امضا داخلش، اندروید
+ * لینکِ https://sedo.site/queue را مستقیم در برنامه باز می‌کند و نه در
+ * مرورگر — یعنی راننده‌ای که روی لینکِ پیامک می‌زند، دیگر لازم نیست دوباره
+ * وارد شود.
+ *
+ * تا وقتی اثر انگشت تنظیم نشده، آرایه خالی برمی‌گردد. این خطا نیست:
+ * اندروید فقط پیوند را برقرار نمی‌کند و همه‌چیز مثل قبل کار می‌کند.
+ */
+Route::get('/.well-known/assetlinks.json', function () {
+    $fingerprints = config('android.fingerprints');
+
+    $links = $fingerprints === [] ? [] : [[
+        'relation' => ['delegate_permission/common.handle_all_urls'],
+        'target' => [
+            'namespace' => 'android_app',
+            'package_name' => config('android.package'),
+            'sha256_cert_fingerprints' => $fingerprints,
+        ],
+    ]];
+
+    return response()->json($links)
+        ->header('Cache-Control', 'public, max-age=3600');
+})->name('assetlinks');
 
 Route::redirect('/', '/queue');

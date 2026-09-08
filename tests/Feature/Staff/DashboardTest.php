@@ -33,6 +33,14 @@ final class DashboardTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        // ۰۹:۰۰ یک روز کاری.
+        //
+        // بدون ثابت‌کردن ساعت، این تست‌ها بعدازظهرها می‌شکستند: مهلت حضورِ
+        // نوبتِ صبح گذشته بود و هشدار «راننده نیامده» درست فعال می‌شد.
+        // رفتار درست بود؛ تست ناپایدار.
+        $this->travelTo(CarbonImmutable::parse('2026-09-07 09:00', 'Asia/Tehran'));
+
         $this->factory = $this->seedFactory();
         $this->seedStaff();
     }

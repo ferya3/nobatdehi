@@ -1,0 +1,9 @@
+# کلید امضا هرگز داخل مخزن نمی‌رود
+keystore.properties
+*.keystore
+*.jks
+
+*.apk
+.gradle/
+build/
+local.properties

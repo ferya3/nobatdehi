@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">نوبت بارگیری</string>
+    <string name="offline_title">اتصال اینترنت نیست</string>
+    <string name="offline_body">برای دیدن نوبت‌ها به اینترنت نیاز است.</string>
+    <string name="retry">تلاش دوباره</string>
+</resources>

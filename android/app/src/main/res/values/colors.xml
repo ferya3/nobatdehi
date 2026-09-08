@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- همان رنگ‌های برند که در manifest.webmanifest هم هست -->
+    <color name="brand">#2f6885</color>
+    <color name="surface">#f8fafc</color>
+    <color name="ink">#1e293b</color>
+    <color name="muted">#64748b</color>
+</resources>
