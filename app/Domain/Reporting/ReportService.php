@@ -85,8 +85,8 @@ final class ReportService
         // می‌بیند، دقیقاً همان اختلافی را نمی‌بیند که باسکول برای دیدنش
         // نصب شده است.
         //
-        // coalesce برای حواله‌های قدیمیِ پیش از باسکول است؛ تکمیل‌شده‌ی امروز
-        // بدون توزین وجود ندارد، چون برگه‌ی خروج بدون وزن پر صادر نمی‌شود.
+        // حواله‌ای که توزین نشده در جمع نمی‌آید. عددِ جایگزینی هم وجود ندارد:
+        // تناژ فقط چیزی است که باسکول گفته.
         $completed = AppointmentStatus::Completed->value;
 
         return $this->scope($factory, $from, $to)
@@ -95,7 +95,7 @@ final class ReportService
             ->selectRaw('products.name as name, count(*) as total')
             ->selectRaw('count(*) filter (where appointments.status = ?) as completed', [$completed])
             ->selectRaw(
-                'coalesce(sum(coalesce(loading_records.net_weight_kg / 1000.0, products.load_tons))'
+                'coalesce(sum(loading_records.net_weight_kg / 1000.0)'
                 .' filter (where appointments.status = ?), 0) as tons',
                 [$completed],
             )

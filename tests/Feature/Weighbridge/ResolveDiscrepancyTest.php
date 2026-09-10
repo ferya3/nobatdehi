@@ -74,7 +74,7 @@ final class ResolveDiscrepancyTest extends TestCase
         return $this->people[$role] = $user->fresh();
     }
 
-    /** کامیونی که وزن پرش با حواله نخوانده */
+    /** کامیونی که بیشتر از ظرفیتش بار زده */
     private function withDiscrepancy(): Appointment
     {
         $truck = $this->makeTruck('12', 'ب', '345', '11');
@@ -97,9 +97,9 @@ final class ResolveDiscrepancyTest extends TestCase
         $appointment = $move($appointment, AppointmentStatus::Loading, Actor::system());
         $appointment = $move($appointment, AppointmentStatus::Loaded, Actor::system());
 
-        // خالص ۲۵ تن در برابر حواله‌ی ۳۰ تنی — بیرون از رواداری ۳٪
+        // ظرفیت تریلی ۳۰ تن است؛ خالص ۳۲ تن یعنی دو تن اضافه‌بار
         $this->actingAs($this->person(Roles::WEIGHBRIDGE), 'web')
-            ->post(route('staff.weighbridge.record', $appointment), ['stage' => 'gross', 'weight_kg' => 39000])
+            ->post(route('staff.weighbridge.record', $appointment), ['stage' => 'gross', 'weight_kg' => 46000])
             ->assertSessionHas('error');
 
         return $appointment->refresh();
@@ -114,7 +114,7 @@ final class ResolveDiscrepancyTest extends TestCase
             ->from(route('staff.queue.show', $appointment))
             ->post(route('staff.queue.weight-discrepancy', $appointment), [
                 'decision' => 'approved',
-                'reason' => 'کسری بار با هماهنگی واحد فروش پذیرفته شد',
+                'reason' => 'اضافه‌بار جزئی با هماهنگی مسئول حمل پذیرفته شد',
             ])
             ->assertSessionHas('success');
 
@@ -125,8 +125,8 @@ final class ResolveDiscrepancyTest extends TestCase
         $this->assertNotNull($record->discrepancy_decided_at);
 
         // وزن دست نمی‌خورد: چیزی که عوض شده اجازه‌ی خروج است، نه عدد
-        $this->assertSame('25000.00', $record->net_weight_kg);
-        $this->assertSame('39000.00', $record->loaded_weight_kg);
+        $this->assertSame('32000.00', $record->net_weight_kg);
+        $this->assertSame('46000.00', $record->loaded_weight_kg);
 
         // و حالا کامیون می‌تواند برود
         $this->actingAs($this->person(Roles::OPERATOR), 'web')
@@ -144,7 +144,7 @@ final class ResolveDiscrepancyTest extends TestCase
         $this->actingAs($this->person(Roles::FACTORY_MANAGER), 'web')
             ->post(route('staff.queue.weight-discrepancy', $appointment), [
                 'decision' => 'rejected',
-                'reason' => 'کسری بار پذیرفته نیست؛ بار تکمیل شود',
+                'reason' => 'اضافه‌بار پذیرفته نیست؛ بار کم شود',
             ])
             ->assertSessionHas('success');
 
@@ -167,10 +167,10 @@ final class ResolveDiscrepancyTest extends TestCase
         $this->actingAs($this->person(Roles::FACTORY_MANAGER), 'web')
             ->post(route('staff.queue.weight-discrepancy', $appointment), [
                 'decision' => 'rejected',
-                'reason' => 'کسری بار پذیرفته نیست؛ بار تکمیل شود',
+                'reason' => 'اضافه‌بار پذیرفته نیست؛ بار کم شود',
             ]);
 
-        // بار تکمیل می‌شود و کامیون دوباره وزن می‌شود — این بار درست
+        // بار کم می‌شود و کامیون دوباره وزن می‌شود — این بار درست
         $this->actingAs($this->person(Roles::WEIGHBRIDGE), 'web')
             ->post(route('staff.weighbridge.record', $appointment), ['stage' => 'gross', 'weight_kg' => 44000])
             ->assertSessionHas('success');
@@ -215,7 +215,7 @@ final class ResolveDiscrepancyTest extends TestCase
         $manager = $this->person(Roles::FACTORY_MANAGER);
 
         $this->actingAs($manager, 'web')->post(route('staff.queue.weight-discrepancy', $appointment), [
-            'decision' => 'approved', 'reason' => 'کسری بار پذیرفته شد',
+            'decision' => 'approved', 'reason' => 'اضافه‌بار پذیرفته شد',
         ]);
 
         $permit = LoadingRecord::firstOrFail()->exit_permit_number;
@@ -251,13 +251,13 @@ final class ResolveDiscrepancyTest extends TestCase
     #[Test]
     public function approving_leaves_a_line_in_the_security_log(): void
     {
-        // «چرا این کامیون با پنج تن کسری بیرون رفت؟» باید جواب داشته باشد
+        // «چرا این کامیون با دو تن اضافه‌بار بیرون رفت؟» باید جواب داشته باشد
         $appointment = $this->withDiscrepancy();
 
         $this->actingAs($this->person(Roles::FACTORY_MANAGER), 'web')
             ->post(route('staff.queue.weight-discrepancy', $appointment), [
                 'decision' => 'approved',
-                'reason' => 'کسری بار با هماهنگی واحد فروش پذیرفته شد',
+                'reason' => 'اضافه‌بار با هماهنگی مسئول حمل پذیرفته شد',
             ]);
 
         $this->assertDatabaseHas('security_logs', [

@@ -20,14 +20,20 @@ class WeightDiscrepancyDetected
 
     public const KIND_OVERLOAD = 'overload';
 
+    /**
+     * کسری بار، که دیگر مغایرت شمرده نمی‌شود.
+     *
+     * ثابت می‌ماند چون ردیف‌های قدیمیِ دیتابیس با همین برچسب ثبت شده‌اند و
+     * صفحه‌ها باید بتوانند نشانشان بدهند؛ ولی چیزی تازه با آن ساخته نمی‌شود.
+     */
     public const KIND_VARIANCE = 'variance';
 
     public function __construct(
         public readonly int $appointmentId,
         public readonly string $kind,
         public readonly float $netKg,
-        public readonly ?float $expectedKg,
-        public readonly ?float $varianceKg,
+        public readonly ?float $capacityKg,
+        public readonly ?float $overloadKg,
         public readonly string $reason,
     ) {}
 }

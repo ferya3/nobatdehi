@@ -18,7 +18,7 @@ const props = defineProps<{
     driverNationalCode: string | null;
     lastTruck: { plate: PlateParts; truck_type_id: number | null } | null;
     truckTypes: TruckTypeOption[];
-    products: { id: number; name: string; load_tons: string | null; description: string | null }[];
+    products: { id: number; name: string; description: string | null }[];
     plateLetters: string[];
 }>();
 
@@ -199,9 +199,7 @@ function submit() {
                                         {{ product.description }}
                                     </p>
                                 </div>
-                                <p v-if="product.load_tons" class="shrink-0 text-sm text-slate-600">
-                                    <span class="num font-semibold">{{ Number(product.load_tons) }}</span> تن
-                                </p>
+
                             </div>
                         </SelectCard>
                     </div>

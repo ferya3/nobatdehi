@@ -65,8 +65,8 @@ class FactorySeeder extends Seeder
         }
 
         $products = [
-            ['code' => 'A', 'name' => 'محصول A', 'load_tons' => 30, 'loading_minutes' => 25, 'sort_order' => 1],
-            ['code' => 'B', 'name' => 'محصول B', 'load_tons' => 20, 'loading_minutes' => 20, 'sort_order' => 2],
+            ['code' => 'A', 'name' => 'محصول A', 'loading_minutes' => 25, 'sort_order' => 1],
+            ['code' => 'B', 'name' => 'محصول B', 'loading_minutes' => 20, 'sort_order' => 2],
         ];
 
         $productModels = [];

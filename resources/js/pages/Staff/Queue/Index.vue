@@ -54,8 +54,8 @@ function weightDetail(row: QueueRow): string {
 
     const parts = [`خالص ${kg(w.net_kg)} کیلوگرم`];
 
-    if (w.expected_kg !== null) parts.push(`حواله ${kg(w.expected_kg)} کیلوگرم`);
-    if (w.variance_kg !== null) parts.push(`اختلاف ${kg(String(Math.abs(Number(w.variance_kg))))} کیلوگرم`);
+    if (w.expected_kg !== null) parts.push(`ظرفیت مجاز ${kg(w.expected_kg)} کیلوگرم`);
+    if (w.variance_kg !== null) parts.push(`اضافه‌بار ${kg(String(Math.abs(Number(w.variance_kg))))} کیلوگرم`);
 
     parts.push('برگه خروج صادر نشده است.');
 

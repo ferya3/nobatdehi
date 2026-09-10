@@ -13,7 +13,6 @@ interface Product {
     name: string;
     code: string;
     description: string | null;
-    load_tons: string | null;
     loading_minutes: number | null;
     sort_order: number;
     priority: number;
@@ -37,7 +36,6 @@ const form = useForm({
     name: '',
     code: '',
     description: '',
-    load_tons: '',
     loading_minutes: '',
     sort_order: '0',
     priority: '0',
@@ -59,7 +57,6 @@ function startEdit(product: Product) {
     form.name = product.name;
     form.code = product.code;
     form.description = product.description ?? '';
-    form.load_tons = product.load_tons ?? '';
     form.loading_minutes = product.loading_minutes === null ? '' : String(product.loading_minutes);
     form.sort_order = String(product.sort_order);
     form.priority = String(product.priority);
@@ -79,7 +76,6 @@ function close() {
 const payload = () => ({
     ...form.data(),
     description: form.description.trim() === '' ? null : form.description.trim(),
-    load_tons: form.load_tons.trim() === '' ? null : form.load_tons.trim(),
     loading_minutes: form.loading_minutes.trim() === '' ? null : Number(form.loading_minutes),
     sort_order: Number(form.sort_order || 0),
     priority: Number(form.priority || 0),
@@ -137,10 +133,6 @@ function remove(product: Product) {
                         <TextInput id="code" v-model="form.code" dir="ltr" placeholder="CEM2" :invalid="!!form.errors.code" />
                     </FormField>
 
-                    <FormField label="تناژ هر بارگیری" for="load_tons" :error="form.errors.load_tons" hint="اختیاری">
-                        <TextInput id="load_tons" v-model="form.load_tons" inputmode="numeric" dir="ltr" placeholder="30" :invalid="!!form.errors.load_tons" />
-                    </FormField>
-
                     <FormField
                         label="مدت بارگیری (دقیقه)"
                         for="loading_minutes"
@@ -186,7 +178,6 @@ function remove(product: Product) {
                             <tr>
                                 <th class="px-4 py-3 font-medium">محصول</th>
                                 <th class="px-4 py-3 font-medium">کد</th>
-                                <th class="px-4 py-3 font-medium">تناژ</th>
                                 <th class="px-4 py-3 font-medium">مدت بارگیری</th>
                                 <th class="px-4 py-3 font-medium">اولویت</th>
                                 <th class="px-4 py-3 font-medium">وضعیت</th>
@@ -201,7 +192,6 @@ function remove(product: Product) {
                                     <p v-if="product.description" class="text-xs text-slate-400">{{ product.description }}</p>
                                 </td>
                                 <td class="px-4 py-3 font-mono text-xs text-slate-500" dir="ltr">{{ product.code }}</td>
-                                <td class="num px-4 py-3 text-slate-700">{{ product.load_tons ?? '—' }}</td>
                                 <td class="num px-4 py-3 text-slate-700">
                                     <span v-if="product.loading_minutes">{{ product.loading_minutes }} دقیقه</span>
                                     <span v-else class="text-slate-400">پیش‌فرض</span>

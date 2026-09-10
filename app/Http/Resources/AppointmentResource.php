@@ -36,7 +36,6 @@ class AppointmentResource extends JsonResource
             'product' => $this->whenLoaded('product', fn () => [
                 'id' => $this->product->id,
                 'name' => $this->product->name,
-                'load_tons' => $this->product->load_tons,
             ]),
 
             'truck' => $this->whenLoaded('truck', fn () => [

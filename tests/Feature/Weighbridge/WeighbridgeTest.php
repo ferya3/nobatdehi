@@ -45,10 +45,9 @@ final class WeighbridgeTest extends TestCase
         $this->factory = $this->seedFactory();
         $this->freezeOnWorkingMorning($this->factory);
 
-        // محصول ۲۰ تنی روی کامیون ۳۰ تنی: جا برای مغایرت و اضافه‌بار هست
         $this->product = Product::where('factory_id', $this->factory->id)->orderBy('id')->firstOrFail();
-        $this->product->update(['load_tons' => 20]);
 
+        // کامیون ۳۰ تنی: سقفِ اضافه‌بار همین است
         $type = TruckType::where('code', 'teriler')->firstOrFail();
         $type->update(['capacity_tons' => 30]);
 
@@ -131,8 +130,10 @@ final class WeighbridgeTest extends TestCase
         $record = LoadingRecord::where('appointment_id', $appointment->id)->firstOrFail();
 
         $this->assertSame('20000.00', $record->net_weight_kg);
-        $this->assertSame('20000.00', $record->expected_net_kg);
-        $this->assertSame('0.00', $record->variance_kg);
+
+        // ظرفیت کامیون، نه تناژِ الزامی — و چون اضافه‌باری نیست، اختلافی هم نیست
+        $this->assertSame('30000.00', $record->expected_net_kg);
+        $this->assertNull($record->variance_kg);
         $this->assertNotNull($record->exit_permit_number);
     }
 
@@ -155,37 +156,23 @@ final class WeighbridgeTest extends TestCase
     }
 
     #[Test]
-    public function test_a_net_weight_outside_the_tolerance_gets_no_exit_permit(): void
+    public function test_a_truck_that_took_less_than_it_could_still_gets_a_permit(): void
     {
+        // باسکول شناور است: تریلیِ سی‌تنی که پنج تن برده، هیچ اشکالی ندارد.
+        // بارِ نصفه یک انتخاب است، نه یک خطا — و پیش از این همین حالت قفل
+        // می‌شد چون تناژِ محصول را الزام می‌گرفتیم.
         $appointment = $this->checkedIn();
 
         $this->weigh($appointment, 'tare', 14000)->assertSessionHas('success');
         $appointment = $this->loadAndFinish($appointment);
 
-        // خالص ۲۵ تن در برابر ۲۰ تنِ حواله — ۲۵٪ اختلاف، خیلی بیشتر از ۳٪
-        $this->weigh($appointment, 'gross', 39000)->assertSessionHas('error');
+        $this->weigh($appointment, 'gross', 19000)->assertSessionHas('success');
 
         $record = LoadingRecord::where('appointment_id', $appointment->id)->firstOrFail();
 
-        $this->assertFalse($record->is_overload);
-        $this->assertSame('5000.00', $record->variance_kg);
-        $this->assertNull($record->exit_permit_number);
-    }
-
-    #[Test]
-    public function test_a_small_difference_inside_the_tolerance_still_gets_a_permit(): void
-    {
-        $appointment = $this->checkedIn();
-
-        $this->weigh($appointment, 'tare', 14000)->assertSessionHas('success');
-        $appointment = $this->loadAndFinish($appointment);
-
-        // ۲۰۴ کیلو اختلاف روی ۲۰ تن ≈ ۱٪ — زیر آستانه‌ی ۳٪
-        $this->weigh($appointment, 'gross', 34204)->assertSessionHas('success');
-
-        $this->assertNotNull(
-            LoadingRecord::where('appointment_id', $appointment->id)->value('exit_permit_number'),
-        );
+        $this->assertSame('5000.00', $record->net_weight_kg);
+        $this->assertNotNull($record->exit_permit_number);
+        $this->assertNull($record->discrepancy_kind);
     }
 
     #[Test]

@@ -267,7 +267,8 @@ class WeighbridgeController extends Controller
             'tare_photo_path' => $photo,
             'tare_by_user_id' => $request->user()->id,
             'waybill_number' => $record->waybill_number ?? $appointment->number,
-            'expected_net_kg' => $this->weighing->expectedNetKg($appointment),
+            // سقفِ مجاز، نه تناژِ الزامی — از همان لحظه‌ی توزین اول ثبت می‌شود
+            'expected_net_kg' => $this->weighing->capacityKg($appointment),
         ])->save();
 
         // خواندن به همین حواله گره می‌خورد تا در سابقه پیدا شود
@@ -310,8 +311,8 @@ class WeighbridgeController extends Controller
             'gross_photo_path' => $photo,
             'gross_by_user_id' => $request->user()->id,
             'net_weight_kg' => $result->netKg,
-            'expected_net_kg' => $result->expectedKg,
-            'variance_kg' => $result->varianceKg,
+            'expected_net_kg' => $result->capacityKg,
+            'variance_kg' => $result->overloadKg,
             'is_overload' => $result->isOverload,
             'discrepancy_kind' => $this->discrepancyKind($result),
         ])->save();
@@ -324,7 +325,7 @@ class WeighbridgeController extends Controller
             newValues: [
                 'loaded_weight_kg' => $weight,
                 'net_weight_kg' => $result->netKg,
-                'variance_kg' => $result->varianceKg,
+                'overload_kg' => $result->overloadKg,
                 'is_overload' => $result->isOverload,
                 'source' => $source->kind,
                 'reading_id' => $source->reading?->id,
@@ -341,7 +342,7 @@ class WeighbridgeController extends Controller
                 [
                     'at' => 'weighbridge',
                     'net_kg' => $result->netKg,
-                    'expected_kg' => $result->expectedKg,
+                    'capacity_kg' => $result->capacityKg,
                     'overload' => $result->isOverload,
                 ],
                 $request,
@@ -359,13 +360,7 @@ class WeighbridgeController extends Controller
 
     private function discrepancyKind(WeighingResult $result): ?string
     {
-        if (! $result->hasDiscrepancy()) {
-            return null;
-        }
-
-        return $result->isOverload
-            ? WeightDiscrepancyDetected::KIND_OVERLOAD
-            : WeightDiscrepancyDetected::KIND_VARIANCE;
+        return $result->hasDiscrepancy() ? WeightDiscrepancyDetected::KIND_OVERLOAD : null;
     }
 
     /**
@@ -389,8 +384,8 @@ class WeighbridgeController extends Controller
             $appointment->id,
             $kind,
             $result->netKg,
-            $result->expectedKg,
-            $result->varianceKg,
+            $result->capacityKg,
+            $result->overloadKg,
             (string) $result->blockReason,
         );
     }
@@ -469,7 +464,7 @@ class WeighbridgeController extends Controller
                 'appointment' => $appointment
                     ? array_merge((new AppointmentResource($appointment))->resolve($request), [
                         'stage' => $this->stageFor($appointment, $record),
-                        'expected_net_kg' => $this->weighing->expectedNetKg($appointment),
+                        'expected_net_kg' => $this->weighing->capacityKg($appointment),
                         'capacity_kg' => $this->weighing->capacityKg($appointment),
                         'weighing' => $record ? [
                             'empty_weight_kg' => $record->empty_weight_kg,

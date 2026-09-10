@@ -47,7 +47,6 @@ class ProductController extends Controller
                     'name' => $p->name,
                     'code' => $p->code,
                     'description' => $p->description,
-                    'load_tons' => Digits::trimDecimal($p->load_tons),
                     'loading_minutes' => $p->loading_minutes,
                     'sort_order' => $p->sort_order,
                     'priority' => $p->priority,
@@ -112,7 +111,7 @@ class ProductController extends Controller
         $this->audit->log(
             action: 'DELETE_PRODUCT',
             entity: $product,
-            oldValues: $product->only(['name', 'code', 'load_tons', 'loading_minutes', 'priority', 'is_active']),
+            oldValues: $product->only(['name', 'code', 'loading_minutes', 'priority', 'is_active']),
             request: $request,
         );
 

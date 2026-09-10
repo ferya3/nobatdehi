@@ -127,17 +127,17 @@ final class SmsTemplates
             ],
 
             'weight.discrepancy.manager' => [
-                'title' => 'مغایرت وزن — اطلاع به مدیر',
-                'body' => "هشدار {kind}\nشماره نوبت: {number}\nپلاک: {plate}\nراننده: {driver}\nنوع بار: {product}\nوزن خالص: {net} کیلوگرم\nتناژ حواله: {expected} کیلوگرم\nاختلاف: {variance} کیلوگرم\nبرگه خروج صادر نشد.",
+                'title' => 'اضافه‌بار — اطلاع به مدیر',
+                'body' => "هشدار {kind}\nشماره نوبت: {number}\nپلاک: {plate}\nراننده: {driver}\nنوع بار: {product}\nوزن خالص: {net} کیلوگرم\nظرفیت مجاز: {expected} کیلوگرم\nاضافه‌بار: {variance} کیلوگرم\nبرگه خروج صادر نشد.",
                 'variables' => [
-                    'kind' => 'نوع اخطار (اضافه‌بار یا مغایرت وزن)',
+                    'kind' => 'نوع اخطار',
                     'number' => 'شماره نوبت',
                     'plate' => 'شماره پلاک',
                     'driver' => 'نام راننده',
                     'product' => 'نوع بار',
                     'net' => 'وزن خالص',
-                    'expected' => 'تناژ حواله',
-                    'variance' => 'اختلاف',
+                    'expected' => 'ظرفیت مجاز کامیون',
+                    'variance' => 'مقدار اضافه‌بار',
                     'date' => 'تاریخ نوبت',
                     'reason' => 'متن کامل مغایرت',
                 ],

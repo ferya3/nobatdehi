@@ -209,6 +209,77 @@ final class FullJourneyTest extends TestCase
     }
 
     /**
+     * خاوری که نصفِ ظرفیتش بار زده — تا انتها، بدون هیچ گیری.
+     *
+     * این همان حالتی است که در عمل قفل می‌شد: تناژِ محصول ۳۰ تن بود و خاور
+     * هرگز به آن نمی‌رسید، پس هر خاوری «مغایرت» می‌گرفت و برگه‌ی خروجش صادر
+     * نمی‌شد. حالا باسکول شناور است و تناژ با خودِ کامیون می‌آید.
+     */
+    #[Test]
+    public function a_small_truck_taking_half_a_load_goes_straight_through(): void
+    {
+        Setting::putMany(['sms_manager_recipients' => '09120000099']);
+
+        $driver = $this->makeDriver('09121110000')->refresh();
+
+        $this->actingAs($driver, 'driver')
+            ->post(route('driver.booking.store'), array_merge($this->plate(), [
+                'driver_name' => 'علی رضایی',
+                'national_code' => '0499370899',
+                // خاور: ظرفیت شش تن
+                'truck_type_id' => TruckType::where('code', 'khavar')->value('id'),
+                'product_id' => $this->product->id,
+                'idempotency_key' => 'khavar-'.uniqid(),
+            ]))
+            ->assertRedirect();
+
+        $appointment = Appointment::firstOrFail();
+
+        $guard = $this->person(Roles::GATE);
+        $token = (string) $this->actingAs($driver, 'driver')
+            ->get(route('driver.appointments.show', $appointment))
+            ->viewData('page')['props']['qr']['token'];
+
+        $this->actingAs($guard, 'web')->post(route('staff.gate.scan'), ['token' => $token, 'source' => 'barcode']);
+        $this->actingAs($guard, 'web')->post(route('staff.gate.check-in', $appointment), ['plate_match' => true]);
+
+        $scaleman = $this->person(Roles::WEIGHBRIDGE);
+
+        // خاورِ خالی حدود ۳٫۵ تن است
+        $this->actingAs($scaleman, 'web')
+            ->post(route('staff.weighbridge.record', $appointment), ['stage' => 'tare', 'weight_kg' => 3500])
+            ->assertSessionHas('success');
+
+        $loader = $this->person(Roles::WAREHOUSE);
+        $this->actingAs($loader, 'web')->post(route('staff.loading.transition', $appointment), ['to' => 'LOADING']);
+        $this->actingAs($loader, 'web')->post(route('staff.loading.transition', $appointment), ['to' => 'LOADED']);
+
+        // سه تن بار زده — نصفِ ظرفیتش
+        $this->actingAs($scaleman, 'web')
+            ->post(route('staff.weighbridge.record', $appointment), ['stage' => 'gross', 'weight_kg' => 6500])
+            ->assertSessionHas('success');
+
+        $record = LoadingRecord::firstOrFail();
+
+        $this->assertSame('3000.00', $record->net_weight_kg);
+        $this->assertNotNull($record->exit_permit_number, 'بارِ نصفه باید برگه خروج بگیرد.');
+        $this->assertNull($record->discrepancy_kind);
+
+        // هیچ اخطاری هم نباید رفته باشد
+        $this->assertSame(
+            0,
+            SmsMessage::where('template_key', 'weight.discrepancy.manager')->count(),
+        );
+
+        // و کامیون بدون دخالت کسی بیرون می‌رود
+        $this->actingAs($this->person(Roles::OPERATOR), 'web')
+            ->post(route('staff.queue.transition', $appointment), ['to' => 'COMPLETED'])
+            ->assertSessionHas('success');
+
+        $this->assertSame(AppointmentStatus::Completed, $appointment->refresh()->status);
+    }
+
+    /**
      * همان کامیون، این بار با اضافه‌بار — تا انتها.
      *
      * تک‌تک قطعه‌ها آزمون خودشان را دارند؛ چیزی که فقط اینجا دیده می‌شود این

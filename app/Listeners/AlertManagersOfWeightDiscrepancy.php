@@ -39,15 +39,15 @@ class AlertManagersOfWeightDiscrepancy implements ShouldQueue
             : Digits::toPersian(number_format($value));
 
         $variables = [
-            'kind' => $event->kind === WeightDiscrepancyDetected::KIND_OVERLOAD ? 'اضافه‌بار' : 'مغایرت وزن',
+            'kind' => 'اضافه‌بار',
             'number' => $appointment->number,
             'date' => Jalali::date($appointment->date),
             'plate' => $appointment->truck?->plate()->full() ?? '—',
             'driver' => $appointment->driver?->displayName() ?? '—',
             'product' => $appointment->product?->name ?? '—',
             'net' => $kg($event->netKg),
-            'expected' => $kg($event->expectedKg),
-            'variance' => $kg($event->varianceKg === null ? null : abs($event->varianceKg)),
+            'expected' => $kg($event->capacityKg),
+            'variance' => $kg($event->overloadKg),
             'reason' => $event->reason,
         ];
 

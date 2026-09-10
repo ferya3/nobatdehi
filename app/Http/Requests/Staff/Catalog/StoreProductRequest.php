@@ -26,7 +26,6 @@ class StoreProductRequest extends FormRequest
                 Rule::unique('products', 'code')->where('factory_id', $this->factoryId()),
             ],
             'description' => ['nullable', 'string', 'max:500'],
-            'load_tons' => ['nullable', 'numeric', 'min:0', 'max:9999.99'],
             'loading_minutes' => ['nullable', 'integer', 'min:1', 'max:600'],
             'sort_order' => ['required', 'integer', 'min:0', 'max:9999'],
 
@@ -42,7 +41,6 @@ class StoreProductRequest extends FormRequest
             'name' => 'نام محصول',
             'code' => 'کد محصول',
             'description' => 'توضیحات',
-            'load_tons' => 'تناژ هر بارگیری',
             'loading_minutes' => 'مدت بارگیری',
             'sort_order' => 'ترتیب نمایش',
             'priority' => 'اولویت',

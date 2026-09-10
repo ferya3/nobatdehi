@@ -76,7 +76,7 @@ class BookingController extends Controller
             'products' => Product::where('factory_id', $factory->id)
                 ->active()
                 ->orderBy('sort_order')
-                ->get(['id', 'name', 'load_tons', 'description']),
+                ->get(['id', 'name', 'description']),
             'plateLetters' => PlateNumber::LETTERS,
         ]);
     }

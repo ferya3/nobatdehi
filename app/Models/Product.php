@@ -16,7 +16,6 @@ class Product extends Model
     protected function casts(): array
     {
         return [
-            'load_tons' => 'decimal:2',
             'loading_minutes' => 'integer',
             'sort_order' => 'integer',
             'priority' => 'integer',

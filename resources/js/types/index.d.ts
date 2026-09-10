@@ -96,7 +96,7 @@ export interface Appointment {
     jalali_long: string;
     time: string;
     end_time: string;
-    product?: { id: number; name: string; load_tons: string | null };
+    product?: { id: number; name: string };
     truck?: { id: number; plate: PlateParts; type: string | null };
     driver?: { id: number; name: string | null; mobile: string };
     loading_point?: string | null;

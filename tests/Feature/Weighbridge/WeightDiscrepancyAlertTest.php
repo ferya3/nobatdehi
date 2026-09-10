@@ -27,7 +27,7 @@ use Tests\Support\SeedsFactory;
 use Tests\TestCase;
 
 /**
- * بار که با حواله نمی‌خواند، کسی باید خبردار شود.
+ * کامیونی که بیشتر از ظرفیتش بار زده، کسی باید خبردار شود.
  *
  * قفل شدنِ برگه‌ی خروج به تنهایی کافی نیست: نتیجه‌اش یک کامیونِ ایستاده در
  * محوطه است و یک اپراتور که باید تصمیم بگیرد، در حالی که تصمیم‌گیرنده
@@ -79,13 +79,14 @@ final class WeightDiscrepancyAlertTest extends TestCase
         return $this->scaleman = $user->fresh();
     }
 
-    private function loaded(?TruckType $type = null): Appointment
+    /** کامیونی که بارگیری‌اش تمام شده — «تک» با ظرفیت ده تن */
+    private function loaded(string $typeCode = 'tak'): Appointment
     {
         $truck = $this->makeTruck('12', 'ب', '345', '11');
 
-        if ($type !== null) {
-            $truck->forceFill(['truck_type_id' => $type->id])->save();
-        }
+        $truck->forceFill([
+            'truck_type_id' => TruckType::where('code', $typeCode)->value('id'),
+        ])->save();
 
         $appointment = app(CreateAppointment::class)($this->booking(
             $this->factory,
@@ -120,12 +121,12 @@ final class WeightDiscrepancyAlertTest extends TestCase
     }
 
     #[Test]
-    public function a_tonnage_that_misses_the_waybill_texts_the_manager(): void
+    public function an_overload_texts_the_manager(): void
     {
         $appointment = $this->loaded();
 
-        // خالص ۳۶ تن در برابر ۳۰ تنِ حواله — ۶ تن بیرون از رواداری
-        $this->weighGross($appointment, 50000);
+        // ظرفیت تک ۱۰ تن است؛ خالص ۱۲ تن یعنی دو تن اضافه‌بار
+        $this->weighGross($appointment, 26000);
 
         $this->assertDatabaseHas('sms_messages', [
             'to' => '09120000099',
@@ -136,28 +137,26 @@ final class WeightDiscrepancyAlertTest extends TestCase
 
         // متن باید واقعاً پر شده باشد و عددها را داشته باشد
         $this->assertStringNotContainsString('{', $body);
-        $this->assertStringContainsString('مغایرت وزن', $body);
+        $this->assertStringContainsString('اضافه‌بار', $body);
         $this->assertStringContainsString((string) $appointment->number, $body);
     }
 
     #[Test]
-    public function an_overload_texts_the_manager_too(): void
+    public function a_half_loaded_truck_texts_nobody(): void
     {
-        $tak = TruckType::where('code', 'tak')->firstOrFail();
+        // خالص شش تن روی کامیونِ ده‌تنی: بارِ نصفه یک انتخاب است، نه خطا.
+        // پیش از این همین حالت «مغایرت» می‌شد و برگه خروج نمی‌گرفت.
+        $this->weighGross($this->loaded(), 20000);
 
-        // ظرفیت تک ۱۰ تن است؛ خالص ۱۲ تن یعنی اضافه‌بار
-        $this->weighGross($this->loaded($tak), 26000);
-
-        $body = (string) SmsMessage::where('template_key', 'weight.discrepancy.manager')->value('body');
-
-        $this->assertStringContainsString('اضافه‌بار', $body);
+        $this->assertSame(0, SmsMessage::where('template_key', 'weight.discrepancy.manager')->count());
+        $this->assertSame('6000.00', LoadingRecord::firstOrFail()->net_weight_kg);
+        $this->assertNotNull(LoadingRecord::firstOrFail()->exit_permit_number);
     }
 
     #[Test]
-    public function a_clean_weighing_texts_nobody(): void
+    public function a_truck_loaded_right_to_its_capacity_texts_nobody(): void
     {
-        // خالص دقیقاً ۳۰ تن — همان تناژ حواله
-        $this->weighGross($this->loaded(), 44000);
+        $this->weighGross($this->loaded(), 24000);
 
         $this->assertSame(0, SmsMessage::where('template_key', 'weight.discrepancy.manager')->count());
         $this->assertNotNull(LoadingRecord::firstOrFail()->exit_permit_number);
@@ -182,11 +181,11 @@ final class WeightDiscrepancyAlertTest extends TestCase
 
         // هر سه توزین واقعاً ثبت می‌شوند — وگرنه این آزمون به دلیل غلط سبز
         // می‌ماند: توزینِ ردشده‌ای که اصلاً پذیرفته نشود، پیامکی هم ندارد.
-        foreach ([50000, 51000, 52000] as $kg) {
+        foreach ([26000, 27000, 28000] as $kg) {
             $this->weighGross($appointment, $kg);
         }
 
-        $this->assertSame('52000.00', LoadingRecord::firstOrFail()->loaded_weight_kg);
+        $this->assertSame('28000.00', LoadingRecord::firstOrFail()->loaded_weight_kg);
 
         $this->assertSame(
             1,
@@ -200,7 +199,7 @@ final class WeightDiscrepancyAlertTest extends TestCase
     {
         Setting::putMany(['sms_weight_alert_recipients' => '09121234567']);
 
-        $this->weighGross($this->loaded(), 50000);
+        $this->weighGross($this->loaded(), 26000);
 
         $this->assertDatabaseHas('sms_messages', [
             'to' => '09121234567',
@@ -220,26 +219,26 @@ final class WeightDiscrepancyAlertTest extends TestCase
         Event::fake([WeightDiscrepancyDetected::class]);
 
         $appointment = $this->loaded();
-        $this->weighGross($appointment, 50000);
+        $this->weighGross($appointment, 26000);
 
         Event::assertDispatched(
             WeightDiscrepancyDetected::class,
             fn (WeightDiscrepancyDetected $e) => $e->appointmentId === $appointment->id
-                && $e->kind === WeightDiscrepancyDetected::KIND_VARIANCE
-                && (int) $e->netKg === 36000
-                && (int) $e->expectedKg === 30000
-                && (int) $e->varianceKg === 6000,
+                && $e->kind === WeightDiscrepancyDetected::KIND_OVERLOAD
+                && (int) $e->netKg === 12000
+                && (int) $e->capacityKg === 10000
+                && (int) $e->overloadKg === 2000,
         );
     }
 
     #[Test]
     public function the_discrepancy_is_written_on_the_record_for_the_panel_to_show(): void
     {
-        $this->weighGross($this->loaded(), 50000);
+        $this->weighGross($this->loaded(), 26000);
 
         $record = LoadingRecord::firstOrFail();
 
-        $this->assertSame('variance', $record->discrepancy_kind);
+        $this->assertSame('overload', $record->discrepancy_kind);
         $this->assertNotNull($record->discrepancy_alerted_at);
         // برگه‌ی خروج قفل می‌ماند تا تعیین تکلیف
         $this->assertNull($record->exit_permit_number);

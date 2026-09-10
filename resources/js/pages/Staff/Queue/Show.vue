@@ -235,18 +235,14 @@ function decide(value: 'approved' | 'rejected') {
                             </dd>
                         </div>
                         <div>
-                            <dt class="text-xs text-slate-500">تناژ حواله</dt>
+                            <dt class="text-xs text-slate-500">ظرفیت مجاز کامیون</dt>
                             <dd class="num mt-0.5 text-sm font-medium text-slate-800" dir="ltr">
                                 {{ kg(appointment.weighing.expected_kg) }}
                             </dd>
                         </div>
-                        <div>
-                            <dt class="text-xs text-slate-500">اختلاف</dt>
-                            <dd
-                                class="num mt-0.5 text-sm font-medium"
-                                :class="appointment.weighing.discrepancy ? 'text-rose-700' : 'text-slate-800'"
-                                dir="ltr"
-                            >
+                        <div v-if="appointment.weighing.variance_kg">
+                            <dt class="text-xs text-slate-500">اضافه‌بار</dt>
+                            <dd class="num mt-0.5 text-sm font-medium text-rose-700" dir="ltr">
                                 {{ kg(appointment.weighing.variance_kg) }}
                             </dd>
                         </div>
