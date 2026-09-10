@@ -133,6 +133,24 @@ class DashboardController extends Controller
         $alerts = [];
 
         foreach ($queue as $appointment) {
+            $record = $appointment->loadingRecord;
+
+            // مغایرت وزن، جدی‌ترین چیزی است که در محوطه می‌گذرد: کامیون
+            // بارگیری شده، برگه‌ی خروج نگرفته، و تا تعیین تکلیف همان‌جا
+            // ایستاده. بخشِ هشدارها بود و این را نمی‌گفت.
+            if ($record?->discrepancy_kind !== null && $record?->exit_permit_number === null) {
+                $alerts[] = [
+                    'ulid' => $appointment->ulid,
+                    'kind' => 'weight_discrepancy',
+                    'number' => $appointment->number,
+                    'plate' => $appointment->truck?->plate(),
+                    'text' => ($record->discrepancy_kind === 'overload' ? 'اضافه‌بار' : 'مغایرت وزن')
+                        .' — برگه خروج صادر نشده و کامیون در محوطه مانده است.',
+                ];
+
+                continue;
+            }
+
             if ($appointment->isLoadingLate()) {
                 $alerts[] = [
                     'ulid' => $appointment->ulid,

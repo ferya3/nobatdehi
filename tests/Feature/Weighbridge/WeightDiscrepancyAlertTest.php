@@ -180,9 +180,13 @@ final class WeightDiscrepancyAlertTest extends TestCase
     {
         $appointment = $this->loaded();
 
-        $this->weighGross($appointment, 50000);
-        $this->weighGross($appointment, 51000);
-        $this->weighGross($appointment, 52000);
+        // هر سه توزین واقعاً ثبت می‌شوند — وگرنه این آزمون به دلیل غلط سبز
+        // می‌ماند: توزینِ ردشده‌ای که اصلاً پذیرفته نشود، پیامکی هم ندارد.
+        foreach ([50000, 51000, 52000] as $kg) {
+            $this->weighGross($appointment, $kg);
+        }
+
+        $this->assertSame('52000.00', LoadingRecord::firstOrFail()->loaded_weight_kg);
 
         $this->assertSame(
             1,

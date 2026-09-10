@@ -56,7 +56,7 @@ final class WeightWarningOnQueueTest extends TestCase
             'is_active' => true,
         ]);
 
-        $user->assignRole(Role::findByName(Roles::OPERATOR));
+        $user->assignRole(Role::findByName(Roles::OPERATOR, 'web'));
 
         return $user->fresh();
     }
@@ -92,7 +92,7 @@ final class WeightWarningOnQueueTest extends TestCase
             'discrepancy_alerted_at' => now(),
         ]);
 
-        $this->actingAs($this->operator())
+        $this->actingAs($this->operator(), 'web')
             ->get(route('staff.queue.index'))
             ->assertOk()
             ->assertInertia(fn (AssertableInertia $page) => $page
@@ -119,7 +119,7 @@ final class WeightWarningOnQueueTest extends TestCase
             'discrepancy_alerted_at' => now(),
         ]);
 
-        $this->actingAs($this->operator())
+        $this->actingAs($this->operator(), 'web')
             ->get(route('staff.queue.index'))
             ->assertOk()
             ->assertInertia(fn (AssertableInertia $page) => $page
@@ -141,7 +141,7 @@ final class WeightWarningOnQueueTest extends TestCase
             'exit_permit_number' => 'X-1',
         ]);
 
-        $this->actingAs($this->operator())
+        $this->actingAs($this->operator(), 'web')
             ->get(route('staff.queue.index'))
             ->assertOk()
             ->assertInertia(fn (AssertableInertia $page) => $page
@@ -154,10 +154,59 @@ final class WeightWarningOnQueueTest extends TestCase
     {
         $this->bookAndLoad();
 
-        $this->actingAs($this->operator())
+        $this->actingAs($this->operator(), 'web')
             ->get(route('staff.queue.index'))
             ->assertOk()
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->where('appointments.0.weighing', null));
+    }
+
+    #[Test]
+    public function the_dashboard_raises_it_as_an_alert(): void
+    {
+        // داشبورد بخش هشدار داشت و از این یکی بی‌خبر بود — در حالی که
+        // کامیونِ قفل‌شده جدی‌ترین چیزی است که در محوطه می‌گذرد
+        $appointment = $this->bookAndLoad();
+
+        LoadingRecord::create([
+            'appointment_id' => $appointment->id,
+            'empty_weight_kg' => 14000,
+            'loaded_weight_kg' => 60000,
+            'net_weight_kg' => 46000,
+            'is_overload' => true,
+            'discrepancy_kind' => 'overload',
+            'discrepancy_alerted_at' => now(),
+        ]);
+
+        $this->actingAs($this->operator(), 'web')
+            ->get(route('staff.dashboard'))
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('alerts.0.kind', 'weight_discrepancy')
+                ->where('alerts.0.number', $appointment->number));
+    }
+
+    #[Test]
+    public function a_resolved_weighing_no_longer_raises_a_dashboard_alert(): void
+    {
+        // بار کم شده، دوباره وزن شده، برگه گرفته — هشدار باید برود
+        $appointment = $this->bookAndLoad();
+
+        LoadingRecord::create([
+            'appointment_id' => $appointment->id,
+            'empty_weight_kg' => 14000,
+            'loaded_weight_kg' => 44000,
+            'net_weight_kg' => 30000,
+            'is_overload' => false,
+            'discrepancy_kind' => 'overload',
+            'discrepancy_alerted_at' => now(),
+            'exit_permit_number' => 'EX-1',
+            'exit_permit_issued_at' => now(),
+        ]);
+
+        $this->actingAs($this->operator(), 'web')
+            ->get(route('staff.dashboard'))
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page->where('alerts', []));
     }
 }

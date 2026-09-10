@@ -50,8 +50,8 @@ final class ReportService
     {
         return $this->scope($factory, $from, $to)
             ->selectRaw('date, count(*) as total')
-            ->selectRaw("count(*) filter (where status = ?) as completed", [AppointmentStatus::Completed->value])
-            ->selectRaw("count(*) filter (where status = ?) as no_show", [AppointmentStatus::NoShow->value])
+            ->selectRaw('count(*) filter (where status = ?) as completed', [AppointmentStatus::Completed->value])
+            ->selectRaw('count(*) filter (where status = ?) as no_show', [AppointmentStatus::NoShow->value])
             ->groupBy('date')
             ->orderBy('date')
             ->get()
@@ -78,11 +78,27 @@ final class ReportService
     /** تفکیک محصول و تناژ */
     public function byProduct(Factory $factory, CarbonImmutable $from, CarbonImmutable $to): Collection
     {
+        // تناژ از باسکول خوانده می‌شود، نه از حواله.
+        //
+        // پیش از این جمعِ load_tons گزارش می‌شد — یعنی «چقدر قرار بود برود»،
+        // نه «چقدر رفت». کارخانه‌ای که باسکول دارد و در گزارشش عددِ حواله را
+        // می‌بیند، دقیقاً همان اختلافی را نمی‌بیند که باسکول برای دیدنش
+        // نصب شده است.
+        //
+        // coalesce برای حواله‌های قدیمیِ پیش از باسکول است؛ تکمیل‌شده‌ی امروز
+        // بدون توزین وجود ندارد، چون برگه‌ی خروج بدون وزن پر صادر نمی‌شود.
+        $completed = AppointmentStatus::Completed->value;
+
         return $this->scope($factory, $from, $to)
             ->join('products', 'products.id', '=', 'appointments.product_id')
+            ->leftJoin('loading_records', 'loading_records.appointment_id', '=', 'appointments.id')
             ->selectRaw('products.name as name, count(*) as total')
-            ->selectRaw("count(*) filter (where appointments.status = ?) as completed", [AppointmentStatus::Completed->value])
-            ->selectRaw("coalesce(sum(products.load_tons) filter (where appointments.status = ?), 0) as tons", [AppointmentStatus::Completed->value])
+            ->selectRaw('count(*) filter (where appointments.status = ?) as completed', [$completed])
+            ->selectRaw(
+                'coalesce(sum(coalesce(loading_records.net_weight_kg / 1000.0, products.load_tons))'
+                .' filter (where appointments.status = ?), 0) as tons',
+                [$completed],
+            )
             ->groupBy('products.name')
             ->orderByDesc('total')
             ->get()
@@ -103,7 +119,7 @@ final class ReportService
             ->where('appointments.factory_id', $factory->id)
             ->whereBetween('appointments.date', [$from->toDateString(), $to->toDateString()])
             ->selectRaw('users.name as name, count(*) as actions')
-            ->selectRaw("count(*) filter (where appointment_transitions.to_status = ?) as completed", [AppointmentStatus::Completed->value])
+            ->selectRaw('count(*) filter (where appointment_transitions.to_status = ?) as completed', [AppointmentStatus::Completed->value])
             ->selectRaw('count(*) filter (where appointment_transitions.is_rollback) as rollbacks')
             ->groupBy('users.name')
             ->orderByDesc('actions')

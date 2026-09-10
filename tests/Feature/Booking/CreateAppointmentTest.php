@@ -58,7 +58,11 @@ final class CreateAppointmentTest extends TestCase
     public function appointment_numbers_are_a_daily_sequence(): void
     {
         $factory = $this->seedFactory();
-        $slot = $this->futureSlot($factory);
+
+        // بدون ثابت کردن ساعت، این آزمون به ساعتِ اجرا وابسته است: عصرِ یک
+        // روزِ کاری، نوبت دوم روی روز بعد می‌افتد و شماره‌گذاری هر روز از یک
+        // شروع می‌شود — پس هر دو «۱» می‌شوند و آزمون بی‌دلیل قرمز می‌شود.
+        $this->freezeOnWorkingMorning($factory);
 
         $first = ($this->create)($this->booking(
             $factory, $this->makeDriver('09120000011'), $this->makeTruck('11', 'ب', '111', '11')));

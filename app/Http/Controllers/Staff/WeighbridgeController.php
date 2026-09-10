@@ -217,8 +217,15 @@ class WeighbridgeController extends Controller
     private function rejectOutOfOrder(Appointment $appointment, ?LoadingRecord $record, string $stage): ?string
     {
         if ($stage === 'tare') {
+            // «اصلاحِ» وزن خالی همان حفره‌ای است که وزن خالص را دلخواه
+            // می‌کند: خالص از همین عدد کم می‌شود، پس هر کس بتواند دوباره
+            // بنویسدش، می‌تواند تناژِ ثبت‌شده را هر چه بخواهد بسازد.
+            //
+            // پیغام قبلی می‌گفت «تغییرش فقط با مسئول شیفت ممکن است» و چنین
+            // راهی وجود نداشت. راهِ واقعی همان لغو حواله و گرفتن نوبت تازه
+            // است — پیش از بارگیری، که هنوز چیزی از دست نرفته.
             if ($record?->hasTare()) {
-                return 'وزن خالی این حواله قبلاً ثبت شده است. تغییرش فقط با مسئول شیفت ممکن است.';
+                return 'وزن خالی این حواله ثبت شده و تغییر نمی‌کند. اگر اشتباه است، حواله را لغو کنید و نوبت تازه بگیرید.';
             }
 
             return $appointment->status === AppointmentStatus::CheckedIn
@@ -226,8 +233,13 @@ class WeighbridgeController extends Controller
                 : 'توزین خالی وقتی انجام می‌شود که کامیون وارد محوطه شده و هنوز بارگیری نشده باشد.';
         }
 
-        if ($record?->hasGross()) {
-            return 'وزن پر این حواله قبلاً ثبت شده است.';
+        // برگه‌ی خروج مرزِ نهایی‌شدنِ وزن است، نه خودِ ثبتِ اول.
+        //
+        // پیش از این هر توزینِ پر «آخرین» بود، حتی توزینی که سامانه ردش کرده
+        // بود. یعنی کامیونِ اضافه‌بار بار را کم می‌کرد و باسکول می‌گفت «قبلاً
+        // ثبت شده»، برگه‌ی خروج هم هرگز صادر نمی‌شد — کامیون تا ابد در محوطه.
+        if ($record?->exit_permit_number !== null) {
+            return 'برگه خروج این حواله صادر شده است؛ وزن دیگر تغییر نمی‌کند.';
         }
 
         if (! $record?->hasTare()) {
@@ -480,27 +492,45 @@ class WeighbridgeController extends Controller
             return $appointment->status === AppointmentStatus::CheckedIn ? 'tare' : null;
         }
 
-        if (! $record->hasGross()) {
+        // تا برگه‌ی خروج صادر نشده، باسکول دوم هنوز کار دارد — چه بار اول
+        // باشد چه توزینِ دوباره بعد از کم کردن بار.
+        if ($record->exit_permit_number === null) {
             return $appointment->status === AppointmentStatus::Loaded ? 'gross' : null;
         }
 
         return null;
     }
 
-    /** @return array<string, int> */
+    /**
+     * چند کامیون واقعاً منتظر باسکول‌اند.
+     *
+     * «منتظر» یعنی کاری مانده، نه اینکه در فلان وضعیت است. شمردنِ خودِ
+     * وضعیت‌ها دو جور اشتباه می‌داد: کامیونی که وزن خالی‌اش گرفته شده و در
+     * نوبتِ لاین ایستاده هنوز CHECKED_IN است، و کامیونی که برگه‌ی خروجش صادر
+     * شده و فقط منتظر ثبت خروج است هنوز LOADED. باسکول‌بان عددی می‌دید که
+     * با صفِ جلوی چشمش نمی‌خواند.
+     *
+     * شرط‌ها عمداً قرینه‌ی stageFor() هستند.
+     *
+     * @return array<string, int>
+     */
     private function pendingCounts(Request $request): array
     {
         $today = CarbonImmutable::today()->toDateString();
         $factoryId = $this->factory($request)->id;
 
-        $count = fn (AppointmentStatus $status) => Appointment::where('factory_id', $factoryId)
-            ->whereDate('date', $today)
-            ->where('status', $status->value)
-            ->count();
+        $base = fn () => Appointment::where('factory_id', $factoryId)->whereDate('date', $today);
 
         return [
-            'tare' => $count(AppointmentStatus::CheckedIn),
-            'gross' => $count(AppointmentStatus::Loaded),
+            'tare' => $base()
+                ->where('status', AppointmentStatus::CheckedIn->value)
+                ->whereDoesntHave('loadingRecord', fn ($q) => $q->whereNotNull('empty_weight_kg'))
+                ->count(),
+
+            'gross' => $base()
+                ->where('status', AppointmentStatus::Loaded->value)
+                ->whereDoesntHave('loadingRecord', fn ($q) => $q->whereNotNull('exit_permit_number'))
+                ->count(),
         ];
     }
 
