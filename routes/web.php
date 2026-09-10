@@ -100,6 +100,7 @@ Route::prefix('panel')->name('staff.')->group(function () {
         // لاین بارگیری
         Route::get('/loading', [LoadingController::class, 'index'])->name('loading.index');
         Route::post('/loading/scan', [LoadingController::class, 'scan'])->name('loading.scan');
+        Route::post('/loading/lookup', [LoadingController::class, 'lookup'])->name('loading.lookup');
         Route::post('/loading/{appointment}/transition', [LoadingController::class, 'transition'])
             ->name('loading.transition');
 

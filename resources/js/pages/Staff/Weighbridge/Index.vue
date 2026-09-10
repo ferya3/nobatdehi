@@ -161,10 +161,21 @@ const previewNet = computed(() => {
     return gross - tare;
 });
 
+/**
+ * دلیلِ نوشتنی فقط وقتی خواسته می‌شود که پلِ باسکول روشن باشد و اپراتور
+ * دورش بزند — قرینه‌ی RecordWeightRequest::bypassesConnectedScale() در سرور.
+ *
+ * هم شرطِ دکمه و هم دیده‌شدنِ فیلد از همین یک محاسبه می‌خوانند؛ وگرنه دکمه
+ * چیزی می‌خواهد که فرم اصلاً نشان نمی‌دهد و اپراتور راهی برای رد شدن ندارد.
+ */
+const reasonRequired = computed(() => manualMode.value && props.scaleEnabled);
+
 /** دکمه‌ی ثبت کِی باز است */
 const canSubmit = computed(() => {
     if (manualMode.value) {
-        return Number(form.weight_kg) > 0 && form.manual_reason.trim().length >= 8;
+        if (reasonRequired.value && form.manual_reason.trim().length < 8) return false;
+
+        return Number(form.weight_kg) > 0;
     }
 
     return usableReading.value !== null;
@@ -402,7 +413,7 @@ function reset() {
                             </FormField>
 
                             <FormField
-                                v-if="scaleEnabled"
+                                v-if="reasonRequired"
                                 label="دلیل ورود دستی"
                                 for="manual_reason"
                                 :error="form.errors.manual_reason"

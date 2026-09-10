@@ -3,6 +3,7 @@ import AlertBox from '@/components/AlertBox.vue';
 import AppButton from '@/components/AppButton.vue';
 import FormField from '@/components/FormField.vue';
 import PlateBadge from '@/components/PlateBadge.vue';
+import PlateInput from '@/components/PlateInput.vue';
 import BarcodeListener from '@/components/BarcodeListener.vue';
 import QrScanner from '@/components/QrScanner.vue';
 import StatusBadge from '@/components/StatusBadge.vue';
@@ -34,6 +35,7 @@ const props = defineProps<{
     loadingPoints: { id: number; name: string }[];
     inProgress: Busy[];
     barcodeEnabled: boolean;
+    plateLetters: string[];
     result?: { error: string | null; appointment: Found | null };
 }>();
 
@@ -65,6 +67,32 @@ function onDetected(token: string) {
         { token },
         { preserveScroll: true, onFinish: () => (scanning.value = false) },
     );
+}
+
+/**
+ * جستجوی پلاک — پشتیبانِ اسکن.
+ *
+ * بارکدخوان خراب می‌شود و کاغذِ حواله در محوطه پاره و خیس می‌شود. آن لحظه
+ * لاین نباید بایستد. ترتیب مرحله‌ها سرِ جایش است: بدون توزین خالی، دکمه‌ی
+ * شروع باز نمی‌شود — چه حواله با اسکن پیدا شده باشد چه با پلاک.
+ */
+const lookup = useForm({
+    plate_two: '',
+    plate_letter: '',
+    plate_three: '',
+    plate_iran: '',
+});
+
+const plateComplete = computed(
+    () =>
+        lookup.plate_two.length === 2 &&
+        lookup.plate_letter !== '' &&
+        lookup.plate_three.length === 3 &&
+        lookup.plate_iran.length === 2,
+);
+
+function submitLookup() {
+    lookup.post(route('staff.loading.lookup'), { preserveScroll: true });
 }
 
 function act(to: 'LOADING' | 'LOADED') {
@@ -181,6 +209,39 @@ function reset() {
                     بدون اسکن حواله، بارگیری شروع نمی‌شود.
                 </p>
                 <QrScanner ref="scanner" @detected="onDetected" />
+            </section>
+
+            <!-- وقتی هیچ‌کدام از بالایی‌ها کار نکردند -->
+            <section v-if="!found" class="card space-y-4 p-5">
+                <div>
+                    <h2 class="text-sm font-semibold text-slate-700">جستجو با شماره پلاک</h2>
+                    <p class="mt-1 text-xs text-slate-500">
+                        وقتی بارکدخوان خراب است یا کد راننده خوانده نمی‌شود. حواله‌ی امروزِ همین
+                        پلاک پیدا می‌شود و بارگیری مثل همیشه ثبت می‌گردد.
+                    </p>
+                </div>
+
+                <PlateInput
+                    v-model:two="lookup.plate_two"
+                    v-model:letter="lookup.plate_letter"
+                    v-model:three="lookup.plate_three"
+                    v-model:iran="lookup.plate_iran"
+                    :letters="plateLetters"
+                    :invalid="!!lookup.errors.plate_two"
+                />
+
+                <p v-if="lookup.errors.plate_letter" class="text-sm text-rose-600">
+                    {{ lookup.errors.plate_letter }}
+                </p>
+
+                <AppButton
+                    size="lg"
+                    :disabled="!plateComplete"
+                    :loading="lookup.processing"
+                    @click="submitLookup"
+                >
+                    پیدا کردن حواله
+                </AppButton>
             </section>
 
             <!-- روی لاین‌ها همین حالا -->

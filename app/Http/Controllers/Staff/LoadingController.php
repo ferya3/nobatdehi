@@ -13,7 +13,9 @@ use App\Domain\Appointment\Exceptions\TransitionBlocked;
 use App\Domain\Appointment\Support\QrToken;
 use App\Domain\Audit\SecurityLogger;
 use App\Domain\Gate\GateDevices;
+use App\Domain\Truck\PlateNumber;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Staff\LoadingPlateLookupRequest;
 use App\Http\Resources\AppointmentResource;
 use App\Models\Appointment;
 use App\Models\Factory;
@@ -73,6 +75,44 @@ class LoadingController extends Controller
         return $this->render($request, $appointment);
     }
 
+    /**
+     * پیدا کردن حواله از روی پلاک.
+     *
+     * بارکدخوان خراب می‌شود و کاغذِ حواله در محوطه‌ی بارگیری خیس و پاره
+     * می‌شود. آن لحظه لاین نباید بایستد. این میان‌بر هیچ اختیاری اضافه
+     * نمی‌کند: شروع و پایان بارگیری همچنان از Policy و ترتیب مرحله‌ها رد
+     * می‌شود و توزین خالیِ نداشته، دکمه‌ی شروع را باز نمی‌کند.
+     */
+    public function lookup(LoadingPlateLookupRequest $request): Response
+    {
+        $this->authorizeLoading($request);
+
+        $plate = $request->plate();
+
+        if ($plate === null) {
+            return $this->render($request, null, 'شماره پلاک معتبر نیست.');
+        }
+
+        $today = Appointment::whereHas('truck', fn ($q) => $q->where('plate_key', $plate->key()))
+            ->where('factory_id', $this->factory($request)->id)
+            ->whereDate('date', CarbonImmutable::today()->toDateString())
+            ->queueOrder()
+            ->get();
+
+        if ($today->isEmpty()) {
+            return $this->render($request, null, 'برای این پلاک امروز حواله‌ای ثبت نشده است.');
+        }
+
+        // یک کامیون می‌تواند بیش از یک حواله‌ی امروز داشته باشد. آنکه کارِ
+        // لاین دارد جلو می‌افتد؛ وگرنه مسئول لاین حواله‌ی بارگیری‌شده را
+        // می‌بیند و فکر می‌کند سامانه گم کرده است.
+        $pending = $today->first(fn (Appointment $a) => $this->actionFor($a) !== null);
+
+        // هیچ‌کدام کارِ لاین ندارند: باز هم نشان می‌دهیم تا *دلیلش* دیده
+        // شود — هنوز وارد نشده، یا قبلاً بارگیری شده.
+        return $this->render($request, $pending ?? $today->first());
+    }
+
     /** شروع یا پایان بارگیری — هر دو از روی همان اسکن */
     public function transition(Request $request, Appointment $appointment, TransitionAppointment $transition): RedirectResponse
     {
@@ -121,6 +161,7 @@ class LoadingController extends Controller
         return Inertia::render('Staff/Loading/Index', [
             // همان بارکدخوانی که در گیت هست، اینجا هم کار می‌کند
             'barcodeEnabled' => $this->gateDevices->barcodeEnabled(),
+            'plateLetters' => PlateNumber::LETTERS,
             'loadingPoints' => LoadingPoint::where('factory_id', $factory->id)
                 ->active()
                 ->orderBy('code')
