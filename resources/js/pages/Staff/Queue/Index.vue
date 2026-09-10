@@ -167,10 +167,19 @@ function shiftDate(days: number) {
 /**
  * صف زنده.
  *
- * WebSocket مسیر اصلی است؛ polling فقط پشتیبان است و وقتی اتصال زنده برقرار
- * باشد فاصله‌اش بسیار طولانی می‌شود. اپراتور نباید هر ده ثانیه صفحه را
- * refresh کند و دیتابیس هم نباید بی‌دلیل کشیده شود.
+ * هر پنج ثانیه، بدون توجه به اینکه WebSocket برقرار است یا نه.
+ *
+ * قبلاً وقتی اتصال زنده برقرار بود فاصله‌ی polling به دو دقیقه می‌رفت، با
+ * این استدلال که رویدادِ Reverb خودش خبر می‌دهد. استدلال درست است تا روزی
+ * که Reverb بالا نباشد یا رویدادی گم شود — و آن روز اپراتور دو دقیقه یک صفِ
+ * کهنه می‌بیند و فکر می‌کند نوبتی ثبت نشده. این صفحه جایی است که کاربر
+ * تمام شیفت رویش می‌ماند؛ یک درخواستِ سبکِ هر پنج ثانیه ارزشش را دارد.
+ *
+ * WebSocket سرِ جایش می‌ماند و همچنان لحظه‌ای است — پنج ثانیه سقفِ تأخیر
+ * است، نه خودِ تأخیر.
  */
+const REFRESH_MS = 5_000;
+
 const { connected } = useLiveChannel(props.isToday ? `factory.${props.factoryId}.queue` : null, {
     'queue.changed': () => refresh(),
 });
@@ -178,7 +187,8 @@ const { connected } = useLiveChannel(props.isToday ? `factory.${props.factoryId}
 let poller: ReturnType<typeof setInterval> | null = null;
 
 function refresh() {
-    if (document.hidden || pending.value) return;
+    // پنجره‌ی بازِ «دلیل» یا «لاین» نباید زیر دست اپراتور بسته شود
+    if (document.hidden || pending.value || priorityFor.value) return;
 
     router.reload({ only: ['appointments', 'counters', 'upcomingDays'] });
 }
@@ -186,9 +196,9 @@ function refresh() {
 /**
  * برگشتن به تب، خودش یک درخواست تازه است.
  *
- * refresh() وقتی صفحه پنهان است کاری نمی‌کند — درست هم همین است. ولی بدون
- * این، اپراتوری که به پنجره‌ی دیگری رفته و برگشته، تا تیکِ بعدیِ ۲۰ ثانیه‌ای
- * یک صف کهنه می‌بیند و فکر می‌کند نوبتی ثبت نشده.
+ * refresh() وقتی صفحه پنهان است کاری نمی‌کند — درست هم همین است، وگرنه تبِ
+ * فراموش‌شده تا فردا هر پنج ثانیه سؤال می‌کند. ولی بدون این، اپراتوری که
+ * برگشته تا تیکِ بعدی یک صف کهنه می‌بیند.
  */
 function onVisible() {
     if (!document.hidden) refresh();
@@ -200,7 +210,7 @@ onMounted(() => {
     document.addEventListener('visibilitychange', onVisible);
     window.addEventListener('focus', onVisible);
 
-    poller = setInterval(refresh, 20_000);
+    poller = setInterval(refresh, REFRESH_MS);
 });
 
 onUnmounted(() => {
@@ -210,11 +220,81 @@ onUnmounted(() => {
     if (poller) clearInterval(poller);
 });
 
-// وقتی اتصال زنده برقرار شد، دیگر لازم نیست هر ۲۰ ثانیه سؤال کنیم
-watch(connected, (isLive) => {
-    if (poller) clearInterval(poller);
+/* ---------------------------------------------------- نوبت‌های تازه‌رسیده */
 
-    poller = setInterval(refresh, isLive ? 120_000 : 20_000);
+/**
+ * تازه‌شدنِ جدول به‌تنهایی کافی نیست.
+ *
+ * نوبت جدید در جای *مرتبِ* خودش می‌نشیند — وسط جدول، نه بالای آن — و
+ * اپراتوری که به صفحه نگاه نمی‌کرده هیچ‌وقت نمی‌فهمد چیزی اضافه شده. پس
+ * ردیف تازه علامت می‌خورد و شمارشش بالای صفحه دیده می‌شود.
+ *
+ * علامت با یک کلیک یا بعد از یک دقیقه پاک می‌شود؛ چیزی که همیشه روشن بماند
+ * دیگر خبر نیست.
+ */
+const FRESH_MS = 60_000;
+
+const known = ref(new Set<string>());
+const fresh = ref(new Set<string>());
+let initialised = false;
+let freshTimer: ReturnType<typeof setTimeout> | null = null;
+
+function markSeen() {
+    fresh.value = new Set();
+
+    if (freshTimer) {
+        clearTimeout(freshTimer);
+        freshTimer = null;
+    }
+}
+
+watch(
+    () => props.appointments,
+    (rows) => {
+        const ulids = rows.map((row) => row.ulid);
+
+        // اولین بار همه‌چیز «تازه» است، که یعنی هیچ‌چیز تازه نیست
+        if (!initialised) {
+            initialised = true;
+            known.value = new Set(ulids);
+
+            return;
+        }
+
+        const added = ulids.filter((ulid) => !known.value.has(ulid));
+
+        known.value = new Set(ulids);
+
+        if (added.length === 0) return;
+
+        const next = new Set(fresh.value);
+        added.forEach((ulid) => next.add(ulid));
+        fresh.value = next;
+
+        if (freshTimer) clearTimeout(freshTimer);
+        freshTimer = setTimeout(markSeen, FRESH_MS);
+    },
+    { immediate: true },
+);
+
+// عوض‌شدن روز یعنی جدولِ دیگری؛ علامت‌های روز قبل به آن ربطی ندارند
+watch(
+    () => props.date,
+    () => {
+        initialised = false;
+        markSeen();
+    },
+);
+
+onUnmounted(() => {
+    if (freshTimer) clearTimeout(freshTimer);
+});
+
+/** چندتا از تازه‌ها با فیلترِ فعلی اصلاً دیده نمی‌شوند */
+const freshHiddenCount = computed(() => {
+    const visible = new Set(rows.value.map((row) => row.ulid));
+
+    return [...fresh.value].filter((ulid) => !visible.has(ulid)).length;
 });
 </script>
 
@@ -223,32 +303,51 @@ watch(connected, (isLive) => {
         <div class="space-y-5">
             <div class="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                    <h1 class="flex items-center gap-2 text-lg font-bold text-slate-900">
+                    <h1 class="flex flex-wrap items-center gap-2 text-lg font-bold text-slate-900">
                         مدیریت صف کامیون‌ها
+
                         <!-- اتصال زنده‌ی خراب باید دیده شود، نه اینکه بی‌صدا به صفِ کهنه ختم شود -->
                         <span
                             v-if="isToday"
-                            :title="connected ? 'به‌روزرسانی زنده برقرار است' : 'اتصال زنده برقرار نیست؛ هر ۲۰ ثانیه تازه می‌شود'"
+                            :title="
+                                connected
+                                    ? 'به‌روزرسانی زنده برقرار است و هر ۵ ثانیه هم بررسی می‌شود'
+                                    : 'اتصال زنده برقرار نیست؛ هر ۵ ثانیه تازه می‌شود'
+                            "
                             :class="[
                                 'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium',
-                                connected ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-800',
+                                connected ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600',
                             ]"
                         >
-                            <span :class="['size-2 rounded-full', connected ? 'bg-emerald-500' : 'bg-amber-500']" aria-hidden="true" />
-                            {{ connected ? 'زنده' : 'هر ۲۰ ثانیه' }}
+                            <span
+                                :class="[
+                                    'size-2 rounded-full',
+                                    connected ? 'animate-pulse bg-emerald-500' : 'bg-slate-400',
+                                ]"
+                                aria-hidden="true"
+                            />
+                            {{ connected ? 'زنده' : 'هر ۵ ثانیه' }}
                         </span>
+
+                        <!-- نوبت تازه در جای مرتبِ خودش می‌نشیند و دیده نمی‌شود؛
+                             این تنها چیزی است که می‌گوید اتفاقی افتاده -->
+                        <button
+                            v-if="fresh.size"
+                            type="button"
+                            class="inline-flex animate-pulse items-center gap-1.5 rounded-full bg-brand-600 px-2.5 py-0.5 text-xs font-medium text-white"
+                            :title="freshHiddenCount ? 'بعضی از نوبت‌های تازه با فیلتر فعلی دیده نمی‌شوند' : 'برای پاک‌کردن علامت کلیک کنید'"
+                            @click="markSeen"
+                        >
+                            <span class="num">{{ fresh.size }}</span>
+                            نوبت تازه
+                            <span v-if="freshHiddenCount" class="font-normal opacity-80">
+                                (<span class="num">{{ freshHiddenCount }}</span> خارج از فیلتر)
+                            </span>
+                        </button>
                     </h1>
                     <p class="mt-0.5 flex items-center gap-2 text-sm text-slate-500">
                         <span>{{ jalaliDate }}</span>
                         <span v-if="isToday" class="text-brand-600">· امروز</span>
-                        <span
-                            v-if="isToday && connected"
-                            class="inline-flex items-center gap-1 text-xs text-emerald-600"
-                            title="به‌روزرسانی زنده برقرار است"
-                        >
-                            <span class="size-1.5 rounded-full bg-emerald-500" />
-                            زنده
-                        </span>
                     </p>
                 </div>
 
@@ -454,7 +553,11 @@ watch(connected, (isLive) => {
                             <tr
                                 v-for="row in rows"
                                 :key="row.ulid"
-                                :class="['transition', busy === row.ulid ? 'opacity-50' : 'hover:bg-slate-50/70']"
+                                :class="[
+                                    'transition',
+                                    busy === row.ulid ? 'opacity-50' : 'hover:bg-slate-50/70',
+                                    fresh.has(row.ulid) ? 'bg-brand-50/70' : '',
+                                ]"
                             >
                                 <td class="px-4 py-3">
                                     <Link
@@ -463,6 +566,12 @@ watch(connected, (isLive) => {
                                     >
                                         {{ row.number }}
                                     </Link>
+                                    <span
+                                        v-if="fresh.has(row.ulid)"
+                                        class="mt-1 block w-fit rounded-full bg-brand-600 px-1.5 py-0.5 text-[10px] font-medium text-white"
+                                    >
+                                        تازه
+                                    </span>
                                 </td>
                                 <td class="px-4 py-3">
                                     <PlateBadge v-if="row.truck" :plate="row.truck.plate" size="sm" />

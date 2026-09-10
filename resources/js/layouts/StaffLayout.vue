@@ -15,14 +15,19 @@ const can = (permission: string) => user.value?.permissions.includes(permission)
 /**
  * منوی اصلی — به ترتیبی که کار در کارخانه پیش می‌رود.
  *
- * داشبورد، بعد سه ایستگاهِ فیزیکی به همان ترتیبی که کامیون از آن‌ها رد
- * می‌شود، و در آخر گزارش‌ها. تنظیمات از منوی اصلی بیرون رفته چون کاری است
- * که هفته‌ای یک بار انجام می‌شود، نه هر ساعت.
+ * داشبورد، بعد مدیریت صف، بعد سه ایستگاهِ فیزیکی به همان ترتیبی که کامیون
+ * از آن‌ها رد می‌شود، و در آخر گزارش‌ها. تنظیمات از منوی اصلی بیرون رفته
+ * چون کاری است که هفته‌ای یک بار انجام می‌شود، نه هر ساعت.
+ *
+ * «مدیریت صف» جای ثابت خودش را دارد و نه یک لینکِ جایگزین وقتی داشبورد
+ * نیست: جدولِ روی داشبورد فقط خواندنی است و دکمه‌ی تغییر وضعیت ندارد. تا
+ * پیش از این، اپراتوری که داشبورد داشت هیچ راهی به صفحه‌ی مدیریت نمی‌دید.
  *
  * route().has() لازم است: مسیرهای فازهای بعدی ممکن است هنوز ثبت نشده باشند.
  */
 const PRIMARY = [
     { label: 'داشبورد', name: 'staff.dashboard', pattern: 'staff.dashboard', permission: 'dashboard.view' },
+    { label: 'مدیریت صف', name: 'staff.queue.index', pattern: 'staff.queue.*', permission: 'queue.view' },
     { label: 'نگهبانی', name: 'staff.gate.index', pattern: 'staff.gate.*', permission: 'queue.checkin' },
     { label: 'باسکول', name: 'staff.weighbridge.index', pattern: 'staff.weighbridge.*', permission: 'weighing.record' },
     { label: 'بارگیری', name: 'staff.loading.index', pattern: 'staff.loading.*', permission: 'queue.start-loading' },
@@ -50,21 +55,7 @@ function build(items: typeof PRIMARY): NavItem[] {
         }));
 }
 
-const primary = computed(() => {
-    const items = build(PRIMARY);
-
-    // صف امروز داخل داشبورد نشان داده می‌شود. ولی نگهبانی و باسکول و انبار
-    // داشبورد ندارند و بدون این، راهی به صف نمی‌ماند.
-    if (!can('dashboard.view') && can('queue.view') && route().has('staff.queue.index')) {
-        items.unshift({
-            label: 'صف امروز',
-            href: route('staff.queue.index'),
-            active: route().current('staff.queue.*'),
-        });
-    }
-
-    return items;
-});
+const primary = computed(() => build(PRIMARY));
 
 const settings = computed(() => build(SETTINGS));
 const settingsActive = computed(() => settings.value.some((item) => item.active));
