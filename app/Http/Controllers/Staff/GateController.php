@@ -19,6 +19,7 @@ use App\Domain\Gate\PlateVerdict;
 use App\Domain\Gate\PlateVerifier;
 use App\Domain\Gate\ScanTicket;
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Staff\Concerns\WorksOnOneWaybill;
 use App\Http\Requests\Staff\CapturePlateRequest;
 use App\Http\Requests\Staff\GateCheckInRequest;
 use App\Http\Requests\Staff\PlateLookupRequest;
@@ -48,6 +49,8 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  */
 class GateController extends Controller
 {
+    use WorksOnOneWaybill;
+
     /** با چه چیزی QR خوانده شد */
     private const SCAN_SOURCES = ['camera', 'barcode'];
 
@@ -65,11 +68,11 @@ class GateController extends Controller
     {
         $this->authorizeGate($request);
 
-        return $this->result($request, null);
+        return $this->result($request, $this->currentWaybill($request), $this->stationNotice($request));
     }
 
     /** اعتبارسنجی توکن QR */
-    public function scan(Request $request): Response
+    public function scan(Request $request): RedirectResponse
     {
         $this->authorizeGate($request);
 
@@ -79,7 +82,7 @@ class GateController extends Controller
         if ($parsed === null) {
             $this->security->log(SecurityLogger::QR_INVALID, null, context: ['reason' => 'bad_token'], request: $request);
 
-            return $this->result($request, null, 'کد QR معتبر نیست یا منقضی شده است.');
+            return $this->toStation()->with('station_notice', 'کد QR معتبر نیست یا منقضی شده است.');
         }
 
         $appointment = Appointment::where('ulid', $parsed['ulid'])->first();
@@ -87,19 +90,20 @@ class GateController extends Controller
         if ($appointment === null || $appointment->factory_id !== $this->factory($request)->id) {
             $this->security->log(SecurityLogger::QR_INVALID, $parsed['ulid'], context: ['reason' => 'not_found'], request: $request);
 
-            return $this->result($request, null, 'نوبتی با این کد پیدا نشد.');
+            return $this->toStation()->with('station_notice', 'نوبتی با این کد پیدا نشد.');
         }
 
         // توکن باید همانی باشد که آخرین بار برای این نوبت صادر شده
         if (! QrToken::matches($appointment, $token)) {
             $this->security->log(SecurityLogger::QR_REPLAY, $appointment->ulid, $appointment, request: $request);
 
-            return $this->result($request, $appointment, 'این کد دیگر معتبر نیست. راننده باید کد را از برنامه دوباره باز کند.');
+            return $this->toStation($appointment)
+                ->with('station_notice', 'این کد دیگر معتبر نیست. راننده باید کد را از برنامه دوباره باز کند.');
         }
 
         ScanTicket::issue($request, $appointment, $this->scanSource($request));
 
-        return $this->result($request, $appointment, scanned: true);
+        return $this->toStation($appointment);
     }
 
     /**
@@ -109,12 +113,12 @@ class GateController extends Controller
      * است. این عمدی است: راهی که «وقتی QR خوانده نمی‌شود» باز گذاشته شود،
      * همان راهی است که کامیونِ بی‌حواله از آن وارد می‌شود.
      */
-    public function lookup(PlateLookupRequest $request): Response
+    public function lookup(PlateLookupRequest $request): RedirectResponse
     {
         $plate = $request->plate();
 
         if ($plate === null) {
-            return $this->result($request, null, 'شماره پلاک معتبر نیست.');
+            return $this->toStation()->with('station_notice', 'شماره پلاک معتبر نیست.');
         }
 
         $appointment = Appointment::whereHas('truck', fn ($q) => $q->where('plate_key', $plate->key()))
@@ -125,10 +129,10 @@ class GateController extends Controller
             ->first();
 
         if ($appointment === null) {
-            return $this->result($request, null, 'برای این پلاک نوبت فعالی در امروز ثبت نشده است.');
+            return $this->toStation()->with('station_notice', 'برای این پلاک نوبت فعالی در امروز ثبت نشده است.');
         }
 
-        return $this->result($request, $appointment);
+        return $this->toStation($appointment);
     }
 
     /**
@@ -143,7 +147,7 @@ class GateController extends Controller
         TransitionAppointment $transition,
     ): RedirectResponse {
         if ($request->user()->cannot('transition', [$appointment, AppointmentStatus::CheckedIn])) {
-            return back()->with('error', 'برای ثبت ورود دسترسی ندارید.');
+            return $this->toStation($appointment)->with('error', 'برای ثبت ورود دسترسی ندارید.');
         }
 
         $scanned = ScanTicket::isValid($request, $appointment);
@@ -161,14 +165,14 @@ class GateController extends Controller
             );
 
             if (! $mayOverride) {
-                return back()->with(
+                return $this->toStation($appointment)->with(
                     'error',
                     'ورود فقط با اسکن QR ثبت می‌شود. اگر کد راننده خوانده نمی‌شود، با مسئول شیفت تماس بگیرید.',
                 );
             }
 
             if ($reason === '') {
-                return back()->with('error', 'برای ثبت ورود بدون اسکن، نوشتن دلیل الزامی است.');
+                return $this->toStation($appointment)->with('error', 'برای ثبت ورود بدون اسکن، نوشتن دلیل الزامی است.');
             }
         }
 
@@ -188,7 +192,7 @@ class GateController extends Controller
                 $request,
             );
 
-            return back()->with('error', $verdict->message);
+            return $this->toStation($appointment)->with('error', $verdict->message);
         }
 
         $scanSource = ScanTicket::source($request, $appointment);
@@ -200,7 +204,7 @@ class GateController extends Controller
                 Actor::user($request->user(), $request->ip()),
             );
         } catch (InvalidStateTransition|TransitionBlocked $e) {
-            return back()->with('error', $e->getMessage());
+            return $this->toStation($appointment)->with('error', $e->getMessage());
         }
 
         $appointment->forceFill([
@@ -350,8 +354,12 @@ class GateController extends Controller
         Request $request,
         ?Appointment $appointment,
         ?string $error = null,
-        bool $scanned = false,
     ): Response {
+        // «اسکن شده» را از همان بلیطی می‌خوانیم که خودِ check-in هم می‌خواند.
+        // پیش از این یک پارامتر جدا بود و می‌توانست با واقعیتِ سرور اختلاف
+        // پیدا کند — یعنی دکمه‌ای که خاموش است ولی سرور قبولش می‌کند.
+        $scanned = $appointment !== null && ScanTicket::isValid($request, $appointment);
+
         $appointment?->load(['driver', 'truck.truckType', 'product']);
 
         $factory = $this->factory($request);
@@ -384,6 +392,11 @@ class GateController extends Controller
                     : null,
             ],
         ]);
+    }
+
+    private function stationRoute(): string
+    {
+        return 'staff.gate.index';
     }
 
     private function factory(Request $request): Factory

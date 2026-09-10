@@ -16,6 +16,7 @@ use App\Domain\Weighbridge\ScaleDevices;
 use App\Domain\Weighbridge\WeighingService;
 use App\Domain\Weighbridge\WeightSource;
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Staff\Concerns\WorksOnOneWaybill;
 use App\Http\Requests\Staff\RecordWeightRequest;
 use App\Http\Requests\Staff\WeighbridgePlateLookupRequest;
 use App\Http\Resources\AppointmentResource;
@@ -41,6 +42,8 @@ use Inertia\Response;
  */
 class WeighbridgeController extends Controller
 {
+    use WorksOnOneWaybill;
+
     public function __construct(
         private readonly WeighingService $weighing,
         private readonly AuditLogger $audit,
@@ -53,11 +56,11 @@ class WeighbridgeController extends Controller
     {
         $this->authorizeWeighing($request);
 
-        return $this->render($request, null);
+        return $this->render($request, $this->currentWaybill($request), $this->stationNotice($request));
     }
 
     /** پیدا کردن کامیون با اسکن همان QR حواله */
-    public function scan(Request $request): Response
+    public function scan(Request $request): RedirectResponse
     {
         $this->authorizeWeighing($request);
 
@@ -67,22 +70,22 @@ class WeighbridgeController extends Controller
         if ($parsed === null) {
             $this->security->log(SecurityLogger::QR_INVALID, null, context: ['at' => 'weighbridge'], request: $request);
 
-            return $this->render($request, null, 'کد QR معتبر نیست یا منقضی شده است.');
+            return $this->toStation()->with('station_notice', 'کد QR معتبر نیست یا منقضی شده است.');
         }
 
         $appointment = Appointment::where('ulid', $parsed['ulid'])->first();
 
         if ($appointment === null || $appointment->factory_id !== $this->factory($request)->id) {
-            return $this->render($request, null, 'حواله‌ای با این کد پیدا نشد.');
+            return $this->toStation()->with('station_notice', 'حواله‌ای با این کد پیدا نشد.');
         }
 
         if (! QrToken::matches($appointment, $token)) {
             $this->security->log(SecurityLogger::QR_REPLAY, $appointment->ulid, $appointment, ['at' => 'weighbridge'], $request);
 
-            return $this->render($request, null, 'این کد دیگر معتبر نیست.');
+            return $this->toStation()->with('station_notice', 'این کد دیگر معتبر نیست.');
         }
 
-        return $this->render($request, $appointment);
+        return $this->toStation($appointment);
     }
 
     /**
@@ -97,12 +100,12 @@ class WeighbridgeController extends Controller
      * و مغایرتی که برگه‌ی خروج را قفل می‌کند. پس پیدا کردنِ همان حواله از
      * راه پلاک، هیچ اختیارِ تازه‌ای به کسی نمی‌دهد.
      */
-    public function lookup(WeighbridgePlateLookupRequest $request): Response
+    public function lookup(WeighbridgePlateLookupRequest $request): RedirectResponse
     {
         $plate = $request->plate();
 
         if ($plate === null) {
-            return $this->render($request, null, 'شماره پلاک معتبر نیست.');
+            return $this->toStation()->with('station_notice', 'شماره پلاک معتبر نیست.');
         }
 
         $today = Appointment::whereHas('truck', fn ($q) => $q->where('plate_key', $plate->key()))
@@ -113,7 +116,7 @@ class WeighbridgeController extends Controller
             ->get();
 
         if ($today->isEmpty()) {
-            return $this->render($request, null, 'برای این پلاک امروز حواله‌ای ثبت نشده است.');
+            return $this->toStation()->with('station_notice', 'برای این پلاک امروز حواله‌ای ثبت نشده است.');
         }
 
         // یک کامیون می‌تواند بیش از یک حواله‌ی امروز داشته باشد. آنکه واقعاً
@@ -125,7 +128,7 @@ class WeighbridgeController extends Controller
 
         // چیزی برای توزین نیست، ولی حواله هست: همان را نشان می‌دهیم تا
         // اپراتور *دلیلش* را ببیند — هنوز وارد نشده، یا قبلاً توزین شده.
-        return $this->render($request, $pending ?? $today->first());
+        return $this->toStation($pending ?? $today->first());
     }
 
     /** ثبت وزن — خالی یا پر */
@@ -142,13 +145,13 @@ class WeighbridgeController extends Controller
         $blocked = $this->rejectOutOfOrder($appointment, $record, $stage);
 
         if ($blocked !== null) {
-            return back()->with('error', $blocked);
+            return $this->toStation($appointment)->with('error', $blocked);
         }
 
         $source = $this->weightFrom($request);
 
         if ($source->isRejected()) {
-            return back()->with('error', $source->error);
+            return $this->toStation($appointment)->with('error', $source->error);
         }
 
         $record ??= LoadingRecord::create(['appointment_id' => $appointment->id]);
@@ -268,7 +271,7 @@ class WeighbridgeController extends Controller
             request: $request,
         );
 
-        return back()->with('success', 'وزن خالی ثبت شد. کامیون می‌تواند به لاین بارگیری برود.');
+        return $this->toStation($appointment)->with('success', 'وزن خالی ثبت شد. کامیون می‌تواند به لاین بارگیری برود.');
     }
 
     private function recordGross(
@@ -329,12 +332,12 @@ class WeighbridgeController extends Controller
                 $request,
             );
 
-            return back()->with('error', $result->blockReason);
+            return $this->toStation($appointment)->with('error', $result->blockReason);
         }
 
         $number = ExitPermit::issue($appointment, $record);
 
-        return back()->with('success', "وزن پر ثبت و برگه خروج {$number} صادر شد.");
+        return $this->toStation($appointment)->with('success', "وزن پر ثبت و برگه خروج {$number} صادر شد.");
     }
 
     /**
@@ -462,6 +465,11 @@ class WeighbridgeController extends Controller
     {
         return $request->user()->factory
             ?? Factory::where('is_active', true)->orderBy('id')->firstOrFail();
+    }
+
+    private function stationRoute(): string
+    {
+        return 'staff.weighbridge.index';
     }
 
     private function authorizeWeighing(Request $request): void

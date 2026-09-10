@@ -107,7 +107,7 @@ final class PlateLookupTest extends TestCase
         $appointment = $this->checkIn($this->book());
 
         $this->actingAs($this->scaleman())
-            ->post(route('staff.weighbridge.lookup'), $this->plate())
+            ->followingRedirects()->post(route('staff.weighbridge.lookup'), $this->plate())
             ->assertOk()
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->component('Staff/Weighbridge/Index')
@@ -122,7 +122,7 @@ final class PlateLookupTest extends TestCase
         $appointment = $this->checkIn($this->book());
 
         $this->actingAs($this->scaleman())
-            ->post(route('staff.weighbridge.lookup'), $this->plate())
+            ->followingRedirects()->post(route('staff.weighbridge.lookup'), $this->plate())
             ->assertOk();
 
         // پیدا کردن از راه پلاک هیچ اختیار تازه‌ای نمی‌دهد؛ ثبت وزن مثل همیشه
@@ -157,7 +157,7 @@ final class PlateLookupTest extends TestCase
         $waiting = $this->checkIn($this->book('09120000002'));
 
         $this->actingAs($this->scaleman())
-            ->post(route('staff.weighbridge.lookup'), $this->plate())
+            ->followingRedirects()->post(route('staff.weighbridge.lookup'), $this->plate())
             ->assertOk()
             ->assertInertia(fn (AssertableInertia $page) => $page
                 // بدون این، اپراتور حواله‌ی توزین‌شده را می‌بیند و فکر
@@ -173,7 +173,7 @@ final class PlateLookupTest extends TestCase
         $appointment = $this->book();
 
         $this->actingAs($this->scaleman())
-            ->post(route('staff.weighbridge.lookup'), $this->plate())
+            ->followingRedirects()->post(route('staff.weighbridge.lookup'), $this->plate())
             ->assertOk()
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->where('result.appointment.number', $appointment->number)
@@ -188,7 +188,7 @@ final class PlateLookupTest extends TestCase
         $this->checkIn($this->book());
 
         $this->actingAs($this->scaleman())
-            ->post(route('staff.weighbridge.lookup'), $this->plate('99', '888'))
+            ->followingRedirects()->post(route('staff.weighbridge.lookup'), $this->plate('99', '888'))
             ->assertOk()
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->where('result.appointment', null)
@@ -209,7 +209,7 @@ final class PlateLookupTest extends TestCase
     {
         // نگهبان جستجوی پلاکِ خودش را دارد، ولی باسکول صفحه‌ی او نیست
         $this->actingAs($this->staff(Roles::GATE, 'gate@test.local'))
-            ->post(route('staff.weighbridge.lookup'), $this->plate())
+            ->followingRedirects()->post(route('staff.weighbridge.lookup'), $this->plate())
             ->assertForbidden();
     }
 
@@ -226,7 +226,7 @@ final class PlateLookupTest extends TestCase
         $appointment->forceFill(['factory_id' => $other->id])->save();
 
         $this->actingAs($this->scaleman())
-            ->post(route('staff.weighbridge.lookup'), $this->plate())
+            ->followingRedirects()->post(route('staff.weighbridge.lookup'), $this->plate())
             ->assertOk()
             ->assertInertia(fn (AssertableInertia $page) => $page->where('result.appointment', null));
     }

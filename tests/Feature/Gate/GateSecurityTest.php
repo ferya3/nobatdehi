@@ -98,7 +98,7 @@ final class GateSecurityTest extends TestCase
         $guard = $this->staff(Roles::GATE);
 
         // نگهبان نوبت را پیدا می‌کند...
-        $this->actingAs($guard)->post(route('staff.gate.lookup'), [
+        $this->actingAs($guard)->followingRedirects()->post(route('staff.gate.lookup'), [
             'plate_two' => '12', 'plate_letter' => 'ب', 'plate_three' => '345', 'plate_iran' => '11',
         ])->assertOk();
 
@@ -117,7 +117,7 @@ final class GateSecurityTest extends TestCase
         $guard = $this->staff(Roles::GATE);
         $token = $this->freshToken($appointment);
 
-        $this->actingAs($guard)->post(route('staff.gate.scan'), ['token' => $token])->assertOk();
+        $this->actingAs($guard)->followingRedirects()->post(route('staff.gate.scan'), ['token' => $token])->assertOk();
 
         $this->actingAs($guard)
             ->post(route('staff.gate.check-in', $appointment), ['plate_match' => true])
@@ -135,7 +135,7 @@ final class GateSecurityTest extends TestCase
         $appointment = $this->book();
         $guard = $this->staff(Roles::GATE);
 
-        $this->actingAs($guard)->post(route('staff.gate.scan'), ['token' => $this->freshToken($appointment)]);
+        $this->actingAs($guard)->followingRedirects()->post(route('staff.gate.scan'), ['token' => $this->freshToken($appointment)]);
 
         $this->actingAs($guard)
             ->post(route('staff.gate.check-in', $appointment), ['plate_match' => false])
@@ -155,7 +155,7 @@ final class GateSecurityTest extends TestCase
         $appointment = $this->book();
         $guard = $this->staff(Roles::GATE);
 
-        $this->actingAs($guard)->post(route('staff.gate.scan'), ['token' => $this->freshToken($appointment)]);
+        $this->actingAs($guard)->followingRedirects()->post(route('staff.gate.scan'), ['token' => $this->freshToken($appointment)]);
 
         // نگهبان «مطابق است» می‌زند، ولی دوربین پلاک دیگری خوانده
         $this->actingAs($guard)
@@ -174,7 +174,7 @@ final class GateSecurityTest extends TestCase
         $appointment = $this->book();
         $guard = $this->staff(Roles::GATE);
 
-        $this->actingAs($guard)->post(route('staff.gate.scan'), ['token' => $this->freshToken($appointment)]);
+        $this->actingAs($guard)->followingRedirects()->post(route('staff.gate.scan'), ['token' => $this->freshToken($appointment)]);
 
         $this->actingAs($guard)
             ->post(route('staff.gate.check-in', $appointment), [
@@ -231,7 +231,7 @@ final class GateSecurityTest extends TestCase
         $appointment = $this->book();
         $guard = $this->staff(Roles::GATE);
 
-        $this->actingAs($guard)->post(route('staff.gate.scan'), ['token' => $this->freshToken($appointment)]);
+        $this->actingAs($guard)->followingRedirects()->post(route('staff.gate.scan'), ['token' => $this->freshToken($appointment)]);
 
         $this->actingAs($guard)
             ->post(route('staff.gate.check-in', $appointment), ['plate_match' => true])

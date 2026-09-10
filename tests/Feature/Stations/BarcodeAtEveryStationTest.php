@@ -106,7 +106,7 @@ final class BarcodeAtEveryStationTest extends TestCase
 
         // بارکدخوان همان رشته‌ای را می‌فرستد که دوربین می‌خواند
         $this->actingAs($this->staff(Roles::WEIGHBRIDGE, 'scale@test.local'))
-            ->post(route('staff.weighbridge.scan'), ['token' => $this->tokenFor($appointment)])
+            ->followingRedirects()->post(route('staff.weighbridge.scan'), ['token' => $this->tokenFor($appointment)])
             ->assertOk()
             ->assertInertia(fn ($page) => $page->where('result.appointment.number', $appointment->number));
     }
@@ -117,7 +117,7 @@ final class BarcodeAtEveryStationTest extends TestCase
         $appointment = $this->checkedIn();
 
         $this->actingAs($this->staff(Roles::WAREHOUSE, 'warehouse@test.local'))
-            ->post(route('staff.loading.scan'), ['token' => $this->tokenFor($appointment)])
+            ->followingRedirects()->post(route('staff.loading.scan'), ['token' => $this->tokenFor($appointment)])
             ->assertOk()
             ->assertInertia(fn ($page) => $page->where('result.appointment.number', $appointment->number));
     }

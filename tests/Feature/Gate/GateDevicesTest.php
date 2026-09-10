@@ -104,7 +104,7 @@ final class GateDevicesTest extends TestCase
         $appointment = $this->book();
         $guard = $this->guard();
 
-        $this->actingAs($guard)->post(route('staff.gate.scan'), [
+        $this->actingAs($guard)->followingRedirects()->post(route('staff.gate.scan'), [
             'token' => $this->freshToken($appointment),
             'source' => 'barcode',
         ])->assertOk();
@@ -129,7 +129,7 @@ final class GateDevicesTest extends TestCase
         $guard = $this->guard();
 
         // دستگاهی که چیز عجیبی بفرستد نباید ستون را با مقدار دلخواهش پر کند
-        $this->actingAs($guard)->post(route('staff.gate.scan'), [
+        $this->actingAs($guard)->followingRedirects()->post(route('staff.gate.scan'), [
             'token' => $this->freshToken($appointment),
             'source' => 'something-made-up',
         ])->assertOk();
@@ -146,7 +146,7 @@ final class GateDevicesTest extends TestCase
     {
         $guard = $this->guard();
 
-        $this->actingAs($guard)->post(route('staff.gate.scan'), [
+        $this->actingAs($guard)->followingRedirects()->post(route('staff.gate.scan'), [
             'token' => 'whatever-the-reader-picked-up',
             'source' => 'barcode',
         ])->assertOk();
@@ -182,7 +182,7 @@ final class GateDevicesTest extends TestCase
         $guard = $this->guard();
         $reading = $this->reading('12-ب-345-11', ['source' => PlateReading::SOURCE_STATION]);
 
-        $this->actingAs($guard)->post(route('staff.gate.scan'), ['token' => $this->freshToken($appointment)]);
+        $this->actingAs($guard)->followingRedirects()->post(route('staff.gate.scan'), ['token' => $this->freshToken($appointment)]);
 
         $this->actingAs($guard)
             ->post(route('staff.gate.check-in', $appointment), ['plate_reading_id' => $reading->id])
@@ -261,7 +261,7 @@ final class GateDevicesTest extends TestCase
         $guard = $this->guard();
         $reading = $this->reading('99-ب-888-22');
 
-        $this->actingAs($guard)->post(route('staff.gate.scan'), ['token' => $this->freshToken($appointment)]);
+        $this->actingAs($guard)->followingRedirects()->post(route('staff.gate.scan'), ['token' => $this->freshToken($appointment)]);
 
         $this->actingAs($guard)
             ->post(route('staff.gate.check-in', $appointment), [
@@ -289,7 +289,7 @@ final class GateDevicesTest extends TestCase
             'captured_at' => now()->subSeconds(PlateReading::FRESH_SECONDS + 60),
         ]);
 
-        $this->actingAs($guard)->post(route('staff.gate.scan'), ['token' => $this->freshToken($appointment)]);
+        $this->actingAs($guard)->followingRedirects()->post(route('staff.gate.scan'), ['token' => $this->freshToken($appointment)]);
 
         $this->actingAs($guard)
             ->post(route('staff.gate.check-in', $appointment), ['plate_reading_id' => $reading->id])
@@ -311,7 +311,7 @@ final class GateDevicesTest extends TestCase
 
         $reading = $this->reading('12-ب-345-11', ['factory_id' => $other->id]);
 
-        $this->actingAs($guard)->post(route('staff.gate.scan'), ['token' => $this->freshToken($appointment)]);
+        $this->actingAs($guard)->followingRedirects()->post(route('staff.gate.scan'), ['token' => $this->freshToken($appointment)]);
 
         $this->actingAs($guard)
             ->post(route('staff.gate.check-in', $appointment), ['plate_reading_id' => $reading->id])
@@ -329,7 +329,7 @@ final class GateDevicesTest extends TestCase
         // شب، باران، پلاک گِلی: عکس هست ولی پلاکی خوانده نشده
         $reading = $this->reading(null, ['raw_plate' => '???', 'plate_key' => null, 'confidence' => null]);
 
-        $this->actingAs($guard)->post(route('staff.gate.scan'), ['token' => $this->freshToken($appointment)]);
+        $this->actingAs($guard)->followingRedirects()->post(route('staff.gate.scan'), ['token' => $this->freshToken($appointment)]);
 
         $this->actingAs($guard)
             ->post(route('staff.gate.check-in', $appointment), [
@@ -356,7 +356,7 @@ final class GateDevicesTest extends TestCase
         // دوربین پلاکِ دیگری خوانده ولی خودش هم مطمئن نیست
         $reading = $this->reading('99-ب-888-22', ['confidence' => 40]);
 
-        $this->actingAs($guard)->post(route('staff.gate.scan'), ['token' => $this->freshToken($appointment)]);
+        $this->actingAs($guard)->followingRedirects()->post(route('staff.gate.scan'), ['token' => $this->freshToken($appointment)]);
 
         $this->actingAs($guard)
             ->post(route('staff.gate.check-in', $appointment), [
@@ -375,7 +375,7 @@ final class GateDevicesTest extends TestCase
         $guard = $this->guard();
         $reading = $this->reading('12-ب-345-11');
 
-        $this->actingAs($guard)->post(route('staff.gate.scan'), ['token' => $this->freshToken($appointment)]);
+        $this->actingAs($guard)->followingRedirects()->post(route('staff.gate.scan'), ['token' => $this->freshToken($appointment)]);
 
         // plate_match اصلاً فرستاده نشده — دوربین کافی است
         $this->actingAs($guard)
@@ -417,7 +417,7 @@ final class GateDevicesTest extends TestCase
         $manager = $this->guard(Roles::FACTORY_MANAGER, 'manager@test.local');
         $reading = $this->reading('12-ب-345-11', ['source' => PlateReading::SOURCE_STATION]);
 
-        $this->actingAs($manager)->post(route('staff.gate.scan'), [
+        $this->actingAs($manager)->followingRedirects()->post(route('staff.gate.scan'), [
             'token' => $this->freshToken($appointment),
             'source' => 'barcode',
         ]);

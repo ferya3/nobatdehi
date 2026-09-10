@@ -118,7 +118,7 @@ final class PlateLookupTest extends TestCase
         $this->weighTare($appointment);
 
         $this->actingAs($this->loader())
-            ->post(route('staff.loading.lookup'), $this->plate())
+            ->followingRedirects()->post(route('staff.loading.lookup'), $this->plate())
             ->assertOk()
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->component('Staff/Loading/Index')
@@ -135,7 +135,7 @@ final class PlateLookupTest extends TestCase
         $this->weighTare($appointment);
 
         $this->actingAs($this->loader())
-            ->post(route('staff.loading.lookup'), $this->plate())
+            ->followingRedirects()->post(route('staff.loading.lookup'), $this->plate())
             ->assertOk();
 
         // پیدا کردن از راه پلاک هیچ اختیار تازه‌ای نمی‌دهد
@@ -153,7 +153,7 @@ final class PlateLookupTest extends TestCase
         $appointment = $this->checkIn($this->book());
 
         $this->actingAs($this->loader())
-            ->post(route('staff.loading.lookup'), $this->plate())
+            ->followingRedirects()->post(route('staff.loading.lookup'), $this->plate())
             ->assertOk()
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->where('result.appointment.has_tare', false));
@@ -181,7 +181,7 @@ final class PlateLookupTest extends TestCase
         $this->weighTare($waiting);
 
         $this->actingAs($this->loader())
-            ->post(route('staff.loading.lookup'), $this->plate())
+            ->followingRedirects()->post(route('staff.loading.lookup'), $this->plate())
             ->assertOk()
             ->assertInertia(fn (AssertableInertia $page) => $page
                 // بدون این، مسئول لاین حواله‌ی تمام‌شده را می‌بیند و فکر
@@ -197,7 +197,7 @@ final class PlateLookupTest extends TestCase
         $appointment = $this->book();
 
         $this->actingAs($this->loader())
-            ->post(route('staff.loading.lookup'), $this->plate())
+            ->followingRedirects()->post(route('staff.loading.lookup'), $this->plate())
             ->assertOk()
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->where('result.appointment.number', $appointment->number)
@@ -212,7 +212,7 @@ final class PlateLookupTest extends TestCase
         $this->checkIn($this->book());
 
         $this->actingAs($this->loader())
-            ->post(route('staff.loading.lookup'), $this->plate('99', '888'))
+            ->followingRedirects()->post(route('staff.loading.lookup'), $this->plate('99', '888'))
             ->assertOk()
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->where('result.appointment', null)
@@ -233,7 +233,7 @@ final class PlateLookupTest extends TestCase
     {
         // باسکول‌بان جستجوی پلاکِ خودش را دارد، ولی لاین صفحه‌ی او نیست
         $this->actingAs($this->staff(Roles::WEIGHBRIDGE, 'scale@test.local'))
-            ->post(route('staff.loading.lookup'), $this->plate())
+            ->followingRedirects()->post(route('staff.loading.lookup'), $this->plate())
             ->assertForbidden();
     }
 
@@ -250,7 +250,7 @@ final class PlateLookupTest extends TestCase
         $appointment->forceFill(['factory_id' => $other->id])->save();
 
         $this->actingAs($this->loader())
-            ->post(route('staff.loading.lookup'), $this->plate())
+            ->followingRedirects()->post(route('staff.loading.lookup'), $this->plate())
             ->assertOk()
             ->assertInertia(fn (AssertableInertia $page) => $page->where('result.appointment', null));
     }

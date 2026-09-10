@@ -89,7 +89,7 @@ final class LoadingStationTest extends TestCase
         $appointment = $this->readyToLoad();
 
         $this->actingAs($this->warehouse())
-            ->post(route('staff.loading.scan'), ['token' => $this->tokenFor($appointment)])
+            ->followingRedirects()->post(route('staff.loading.scan'), ['token' => $this->tokenFor($appointment)])
             ->assertOk()
             ->assertInertia(fn ($page) => $page
                 ->where('result.appointment.action', 'start')
@@ -102,7 +102,7 @@ final class LoadingStationTest extends TestCase
         $this->readyToLoad();
 
         $this->actingAs($this->warehouse())
-            ->post(route('staff.loading.scan'), ['token' => 'v1.NOPE.x.9999999999.deadbeef'])
+            ->followingRedirects()->post(route('staff.loading.scan'), ['token' => 'v1.NOPE.x.9999999999.deadbeef'])
             ->assertInertia(fn ($page) => $page
                 ->where('result.appointment', null)
                 ->whereNot('result.error', null));

@@ -68,7 +68,7 @@ final class GateTest extends TestCase
         [$appointment, $token] = $this->todayAppointmentWithQr();
 
         $this->actingAs($this->gate())
-            ->post(route('staff.gate.scan'), ['token' => $token])
+            ->followingRedirects()->post(route('staff.gate.scan'), ['token' => $token])
             ->assertOk()
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->where('result.error', null)
@@ -82,7 +82,7 @@ final class GateTest extends TestCase
         [, $token] = $this->todayAppointmentWithQr();
 
         $this->actingAs($this->gate())
-            ->post(route('staff.gate.scan'), ['token' => substr($token, 0, -1).'x'])
+            ->followingRedirects()->post(route('staff.gate.scan'), ['token' => substr($token, 0, -1).'x'])
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->where('result.appointment', null)
                 ->whereNot('result.error', null));
@@ -97,7 +97,7 @@ final class GateTest extends TestCase
 
         foreach ([(string) $appointment->id, $appointment->ulid] as $guess) {
             $this->actingAs($this->gate())
-                ->post(route('staff.gate.scan'), ['token' => $guess])
+                ->followingRedirects()->post(route('staff.gate.scan'), ['token' => $guess])
                 ->assertInertia(fn (AssertableInertia $page) => $page->where('result.appointment', null));
         }
     }
@@ -111,7 +111,7 @@ final class GateTest extends TestCase
         $appointment->forceFill(['qr_token_hash' => $hash])->save();
 
         $this->actingAs($this->gate())
-            ->post(route('staff.gate.scan'), ['token' => $first])
+            ->followingRedirects()->post(route('staff.gate.scan'), ['token' => $first])
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->whereNot('result.error', null)
                 ->where('result.appointment.can_check_in', false));
@@ -126,7 +126,7 @@ final class GateTest extends TestCase
         $guard = $this->gate();
 
         // بدون اسکن، ورود ثبت نمی‌شود — پس اول اسکن
-        $this->actingAs($guard)->post(route('staff.gate.scan'), ['token' => $token]);
+        $this->actingAs($guard)->followingRedirects()->post(route('staff.gate.scan'), ['token' => $token]);
 
         $this->actingAs($guard)
             ->post(route('staff.gate.check-in', $appointment), ['plate_match' => true])
@@ -143,7 +143,7 @@ final class GateTest extends TestCase
         // هم نشان می‌دهد. چیزی که دوباره‌کاری را می‌بندد، وضعیت نوبت است.
         $this->assertNotNull($appointment->qr_token_hash);
 
-        $this->actingAs($guard)->post(route('staff.gate.scan'), ['token' => $token]);
+        $this->actingAs($guard)->followingRedirects()->post(route('staff.gate.scan'), ['token' => $token]);
 
         $this->actingAs($guard)
             ->post(route('staff.gate.check-in', $appointment), ['plate_match' => true])
@@ -158,7 +158,7 @@ final class GateTest extends TestCase
         [$appointment] = $this->todayAppointmentWithQr('34');
 
         $this->actingAs($this->gate())
-            ->post(route('staff.gate.lookup'), [
+            ->followingRedirects()->post(route('staff.gate.lookup'), [
                 'plate_two' => '۳۴',
                 'plate_letter' => 'ب',
                 'plate_three' => '۳۴۵',
@@ -172,7 +172,7 @@ final class GateTest extends TestCase
     public function a_plate_with_no_appointment_today_says_so(): void
     {
         $this->actingAs($this->gate())
-            ->post(route('staff.gate.lookup'), [
+            ->followingRedirects()->post(route('staff.gate.lookup'), [
                 'plate_two' => '99',
                 'plate_letter' => 'ی',
                 'plate_three' => '999',
@@ -204,7 +204,7 @@ final class GateTest extends TestCase
         $ceo = User::role(Roles::CEO)->firstOrFail();
 
         $this->actingAs($ceo)->get(route('staff.gate.index'))->assertForbidden();
-        $this->actingAs($ceo)->post(route('staff.gate.scan'), ['token' => $token])->assertForbidden();
+        $this->actingAs($ceo)->followingRedirects()->post(route('staff.gate.scan'), ['token' => $token])->assertForbidden();
         $this->actingAs($ceo)->post(route('staff.gate.check-in', $appointment), ['plate_match' => true])->assertForbidden();
     }
 
@@ -221,7 +221,7 @@ final class GateTest extends TestCase
         $appointment->forceFill(['factory_id' => $other->id])->save();
 
         $this->actingAs($this->gate())
-            ->post(route('staff.gate.scan'), ['token' => $token])
+            ->followingRedirects()->post(route('staff.gate.scan'), ['token' => $token])
             ->assertInertia(fn (AssertableInertia $page) => $page->where('result.appointment', null));
     }
 }

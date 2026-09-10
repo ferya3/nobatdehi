@@ -15,6 +15,7 @@ use App\Domain\Audit\SecurityLogger;
 use App\Domain\Gate\GateDevices;
 use App\Domain\Truck\PlateNumber;
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Staff\Concerns\WorksOnOneWaybill;
 use App\Http\Requests\Staff\LoadingPlateLookupRequest;
 use App\Http\Resources\AppointmentResource;
 use App\Models\Appointment;
@@ -35,6 +36,8 @@ use Inertia\Response;
  */
 class LoadingController extends Controller
 {
+    use WorksOnOneWaybill;
+
     public function __construct(
         private readonly SecurityLogger $security,
         private readonly GateDevices $gateDevices,
@@ -44,10 +47,10 @@ class LoadingController extends Controller
     {
         $this->authorizeLoading($request);
 
-        return $this->render($request, null);
+        return $this->render($request, $this->currentWaybill($request), $this->stationNotice($request));
     }
 
-    public function scan(Request $request): Response
+    public function scan(Request $request): RedirectResponse
     {
         $this->authorizeLoading($request);
 
@@ -57,22 +60,22 @@ class LoadingController extends Controller
         if ($parsed === null) {
             $this->security->log(SecurityLogger::QR_INVALID, null, context: ['at' => 'loading'], request: $request);
 
-            return $this->render($request, null, 'کد QR معتبر نیست یا منقضی شده است.');
+            return $this->toStation()->with('station_notice', 'کد QR معتبر نیست یا منقضی شده است.');
         }
 
         $appointment = Appointment::where('ulid', $parsed['ulid'])->first();
 
         if ($appointment === null || $appointment->factory_id !== $this->factory($request)->id) {
-            return $this->render($request, null, 'حواله‌ای با این کد پیدا نشد.');
+            return $this->toStation()->with('station_notice', 'حواله‌ای با این کد پیدا نشد.');
         }
 
         if (! QrToken::matches($appointment, $token)) {
             $this->security->log(SecurityLogger::QR_REPLAY, $appointment->ulid, $appointment, ['at' => 'loading'], $request);
 
-            return $this->render($request, null, 'این کد دیگر معتبر نیست.');
+            return $this->toStation()->with('station_notice', 'این کد دیگر معتبر نیست.');
         }
 
-        return $this->render($request, $appointment);
+        return $this->toStation($appointment);
     }
 
     /**
@@ -83,14 +86,14 @@ class LoadingController extends Controller
      * نمی‌کند: شروع و پایان بارگیری همچنان از Policy و ترتیب مرحله‌ها رد
      * می‌شود و توزین خالیِ نداشته، دکمه‌ی شروع را باز نمی‌کند.
      */
-    public function lookup(LoadingPlateLookupRequest $request): Response
+    public function lookup(LoadingPlateLookupRequest $request): RedirectResponse
     {
         $this->authorizeLoading($request);
 
         $plate = $request->plate();
 
         if ($plate === null) {
-            return $this->render($request, null, 'شماره پلاک معتبر نیست.');
+            return $this->toStation()->with('station_notice', 'شماره پلاک معتبر نیست.');
         }
 
         $today = Appointment::whereHas('truck', fn ($q) => $q->where('plate_key', $plate->key()))
@@ -100,7 +103,7 @@ class LoadingController extends Controller
             ->get();
 
         if ($today->isEmpty()) {
-            return $this->render($request, null, 'برای این پلاک امروز حواله‌ای ثبت نشده است.');
+            return $this->toStation()->with('station_notice', 'برای این پلاک امروز حواله‌ای ثبت نشده است.');
         }
 
         // یک کامیون می‌تواند بیش از یک حواله‌ی امروز داشته باشد. آنکه کارِ
@@ -110,7 +113,7 @@ class LoadingController extends Controller
 
         // هیچ‌کدام کارِ لاین ندارند: باز هم نشان می‌دهیم تا *دلیلش* دیده
         // شود — هنوز وارد نشده، یا قبلاً بارگیری شده.
-        return $this->render($request, $pending ?? $today->first());
+        return $this->toStation($pending ?? $today->first());
     }
 
     /** شروع یا پایان بارگیری — هر دو از روی همان اسکن */
@@ -123,11 +126,11 @@ class LoadingController extends Controller
         $target = AppointmentStatus::tryFrom((string) $request->input('to'));
 
         if (! in_array($target, [AppointmentStatus::Loading, AppointmentStatus::Loaded], true)) {
-            return back()->with('error', 'این عملیات از لاین بارگیری انجام نمی‌شود.');
+            return $this->toStation($appointment)->with('error', 'این عملیات از لاین بارگیری انجام نمی‌شود.');
         }
 
         if ($request->user()->cannot('transition', [$appointment, $target])) {
-            return back()->with('error', 'برای این عملیات دسترسی ندارید.');
+            return $this->toStation($appointment)->with('error', 'برای این عملیات دسترسی ندارید.');
         }
 
         $validated = $request->validate([
@@ -142,7 +145,7 @@ class LoadingController extends Controller
                 loadingPointId: $validated['loading_point_id'] ?? null,
             );
         } catch (InvalidStateTransition|TransitionBlocked $e) {
-            return back()->with('error', $e->getMessage());
+            return $this->toStation($appointment)->with('error', $e->getMessage());
         }
 
         return redirect()
@@ -218,6 +221,11 @@ class LoadingController extends Controller
             AppointmentStatus::Loading => 'finish',
             default => null,
         };
+    }
+
+    private function stationRoute(): string
+    {
+        return 'staff.loading.index';
     }
 
     private function factory(Request $request): Factory
