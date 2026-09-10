@@ -106,6 +106,8 @@ Route::prefix('panel')->name('staff.')->group(function () {
         // باسکول اول و دوم
         Route::get('/weighbridge', [WeighbridgeController::class, 'index'])->name('weighbridge.index');
         Route::post('/weighbridge/scan', [WeighbridgeController::class, 'scan'])->name('weighbridge.scan');
+        // پشتیبانِ اسکن: وقتی بارکدخوان یا QR از کار افتاده باشد
+        Route::post('/weighbridge/lookup', [WeighbridgeController::class, 'lookup'])->name('weighbridge.lookup');
         Route::post('/weighbridge/{appointment}/record', [WeighbridgeController::class, 'record'])
             ->name('weighbridge.record');
         Route::get('/weighbridge/readings', [WeighbridgeController::class, 'readings'])

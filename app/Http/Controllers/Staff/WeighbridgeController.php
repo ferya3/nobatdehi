@@ -10,12 +10,14 @@ use App\Domain\Appointment\Support\QrToken;
 use App\Domain\Audit\AuditLogger;
 use App\Domain\Audit\SecurityLogger;
 use App\Domain\Gate\GateDevices;
+use App\Domain\Truck\PlateNumber;
 use App\Domain\Weighbridge\ExitPermit;
 use App\Domain\Weighbridge\ScaleDevices;
 use App\Domain\Weighbridge\WeighingService;
 use App\Domain\Weighbridge\WeightSource;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Staff\RecordWeightRequest;
+use App\Http\Requests\Staff\WeighbridgePlateLookupRequest;
 use App\Http\Resources\AppointmentResource;
 use App\Models\Appointment;
 use App\Models\Factory;
@@ -81,6 +83,49 @@ class WeighbridgeController extends Controller
         }
 
         return $this->render($request, $appointment);
+    }
+
+    /**
+     * پیدا کردن حواله با شماره پلاک.
+     *
+     * بارکدخوان خراب می‌شود، گوشی راننده خاموش می‌شود، و QR روی کاغذِ خیس
+     * خوانده نمی‌شود. بدون این، باسکول در همان لحظه می‌ایستد.
+     *
+     * برخلاف نگهبانی، اینجا جستجوی پلاک چیزی را شل نمی‌کند: ثبت ورود در گیت
+     * به بلیط اسکن نیاز دارد ولی ثبت وزن هرگز نداشته. آنچه وزن را نگه
+     * می‌دارد جای دیگری است — ترتیب مرحله‌ها، عددی که از خودِ باسکول می‌آید،
+     * و مغایرتی که برگه‌ی خروج را قفل می‌کند. پس پیدا کردنِ همان حواله از
+     * راه پلاک، هیچ اختیارِ تازه‌ای به کسی نمی‌دهد.
+     */
+    public function lookup(WeighbridgePlateLookupRequest $request): Response
+    {
+        $plate = $request->plate();
+
+        if ($plate === null) {
+            return $this->render($request, null, 'شماره پلاک معتبر نیست.');
+        }
+
+        $today = Appointment::whereHas('truck', fn ($q) => $q->where('plate_key', $plate->key()))
+            ->where('factory_id', $this->factory($request)->id)
+            ->whereDate('date', CarbonImmutable::today()->toDateString())
+            ->with('loadingRecord')
+            ->queueOrder()
+            ->get();
+
+        if ($today->isEmpty()) {
+            return $this->render($request, null, 'برای این پلاک امروز حواله‌ای ثبت نشده است.');
+        }
+
+        // یک کامیون می‌تواند بیش از یک حواله‌ی امروز داشته باشد. آنکه واقعاً
+        // کار باسکول دارد را جلو می‌اندازیم؛ وگرنه اپراتور حواله‌ی توزین‌شده
+        // را می‌بیند و فکر می‌کند سامانه اشتباه می‌کند.
+        $pending = $today->first(
+            fn (Appointment $a) => $this->stageFor($a, $a->loadingRecord) !== null,
+        );
+
+        // چیزی برای توزین نیست، ولی حواله هست: همان را نشان می‌دهیم تا
+        // اپراتور *دلیلش* را ببیند — هنوز وارد نشده، یا قبلاً توزین شده.
+        return $this->render($request, $pending ?? $today->first());
     }
 
     /** ثبت وزن — خالی یا پر */
@@ -358,6 +403,9 @@ class WeighbridgeController extends Controller
             'requireStable' => $this->scales->requireStable(),
             'scales' => $this->liveScales($request),
             'pending' => $this->pendingCounts($request),
+            // از سرور می‌آید و نه یک ثابت در Vue: نسخه‌ی سوم این فهرست،
+            // همان نسخه‌ای است که روزی با PlateNumber فرق پیدا می‌کند.
+            'plateLetters' => PlateNumber::LETTERS,
             'result' => [
                 'error' => $error,
                 'appointment' => $appointment

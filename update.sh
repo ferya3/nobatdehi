@@ -402,6 +402,10 @@ check "فرمان پاک‌سازی خواندن‌های پلاک موجود ا
 
 # مسیر پل باید در route:cache باشد، وگرنه پل ۴۰۴ می‌گیرد و اپراتور بی‌سروصدا
 # به تایپ دستی برمی‌گردد — همان چیزی که قرار بود حذف شود.
+# پشتیبانِ پلاک: بدون آن، خرابیِ بارکدخوان یعنی توقف باسکول
+check_output "جستجوی پلاک در باسکول ثبت شده" \
+    "$PHP_BIN artisan route:list --name=staff.weighbridge.lookup" "panel/weighbridge/lookup"
+
 check_output "مسیر دریافت وزن از باسکول ثبت شده" \
     "$PHP_BIN artisan route:list --name=api.weighbridge.reading" "api/weighbridge/reading"
 
