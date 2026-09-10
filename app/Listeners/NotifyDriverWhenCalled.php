@@ -28,7 +28,7 @@ class NotifyDriverWhenCalled implements ShouldQueue
             return;
         }
 
-        $appointment = Appointment::with(['driver', 'loadingPoint'])->find($event->appointmentId);
+        $appointment = Appointment::with(['driver', 'truck', 'loadingPoint'])->find($event->appointmentId);
 
         if ($appointment?->driver === null) {
             return;
@@ -36,6 +36,7 @@ class NotifyDriverWhenCalled implements ShouldQueue
 
         $this->sms->queueTemplate('appointment.called', $appointment->driver->mobile, [
             'number' => $appointment->number,
+            'plate' => $appointment->truck?->plate()->full() ?? '—',
             'loading_point' => $appointment->loadingPoint?->name ?? 'محوطه بارگیری',
         ], $appointment);
     }

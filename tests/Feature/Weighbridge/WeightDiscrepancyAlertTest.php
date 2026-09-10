@@ -50,7 +50,7 @@ final class WeightDiscrepancyAlertTest extends TestCase
         $this->freezeOnWorkingMorning($this->factory);
 
         // محصول A تناژ حواله‌اش ۳۰ تن است؛ رواداری کارخانه ۳٪ یعنی ۹۰۰ کیلو
-        $this->product = Product::where('factory_id', $this->factory->id)->firstOrFail();
+        $this->product = Product::where('factory_id', $this->factory->id)->orderBy('id')->firstOrFail();
 
         Setting::putMany([
             'sms_provider' => 'console',

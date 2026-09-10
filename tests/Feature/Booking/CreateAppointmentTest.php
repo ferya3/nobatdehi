@@ -35,7 +35,8 @@ final class CreateAppointmentTest extends TestCase
 
         $appointment = ($this->create)($this->booking($factory, $driver, $truck));
 
-        $this->assertSame(AppointmentStatus::Booked, $appointment->status);
+        // راننده که نوبت گرفت، در صف است — نه منتظر یک کلیکِ اپراتور
+        $this->assertSame(AppointmentStatus::Waiting, $appointment->status);
         $this->assertSame(1, $appointment->number);
         $this->assertNotNull($appointment->ulid);
 
@@ -47,7 +48,7 @@ final class CreateAppointmentTest extends TestCase
         // اولین انتقال هم ثبت شده باشد
         $this->assertDatabaseHas('appointment_transitions', [
             'appointment_id' => $appointment->id,
-            'to_status' => AppointmentStatus::Booked->value,
+            'to_status' => AppointmentStatus::Waiting->value,
         ]);
 
         // کامیون به راننده وصل شده باشد

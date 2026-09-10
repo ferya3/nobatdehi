@@ -92,6 +92,11 @@ class AppointmentResource extends JsonResource
                 },
                 'alerted_at' => $this->loadingRecord->discrepancy_alerted_at?->toIso8601String(),
                 'exit_permit_number' => $this->loadingRecord->exit_permit_number,
+                'awaits_decision' => $this->loadingRecord->awaitsDecision(),
+                'decision' => $this->loadingRecord->discrepancy_decision,
+                'decision_reason' => $this->loadingRecord->discrepancy_decision_reason,
+                'decided_by' => $this->loadingRecord->discrepancyDecidedBy?->name,
+                'decided_at' => $this->loadingRecord->discrepancy_decided_at?->toIso8601String(),
             ]),
 
             'cancel_reason' => $this->cancel_reason,

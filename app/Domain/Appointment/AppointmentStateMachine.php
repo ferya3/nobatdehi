@@ -21,7 +21,7 @@ final class AppointmentStateMachine
      */
     private const FORWARD = [
         'BOOKED' => ['WAITING', 'CHECKED_IN', 'CANCELLED', 'NO_SHOW', 'REJECTED', 'EXPIRED'],
-        'WAITING' => ['CALLED', 'CHECKED_IN', 'CANCELLED', 'NO_SHOW', 'EXPIRED'],
+        'WAITING' => ['CALLED', 'CHECKED_IN', 'CANCELLED', 'NO_SHOW', 'REJECTED', 'EXPIRED'],
         'CALLED' => ['CHECKED_IN', 'CANCELLED', 'NO_SHOW'],
         'CHECKED_IN' => ['LOADING', 'CANCELLED'],
         'LOADING' => ['LOADED', 'CANCELLED'],

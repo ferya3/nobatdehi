@@ -46,7 +46,7 @@ final class WeighbridgeTest extends TestCase
         $this->freezeOnWorkingMorning($this->factory);
 
         // محصول ۲۰ تنی روی کامیون ۳۰ تنی: جا برای مغایرت و اضافه‌بار هست
-        $this->product = Product::where('factory_id', $this->factory->id)->firstOrFail();
+        $this->product = Product::where('factory_id', $this->factory->id)->orderBy('id')->firstOrFail();
         $this->product->update(['load_tons' => 20]);
 
         $type = TruckType::where('code', 'teriler')->firstOrFail();

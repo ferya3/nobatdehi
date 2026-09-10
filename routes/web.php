@@ -16,7 +16,9 @@ use App\Http\Controllers\Staff\QueueController;
 use App\Http\Controllers\Staff\ReportController;
 use App\Http\Controllers\Staff\SettingsController;
 use App\Http\Controllers\Staff\SmsSettingsController;
+use App\Http\Controllers\Staff\SmsTemplateController;
 use App\Http\Controllers\Staff\WeighbridgeController;
+use App\Http\Controllers\Staff\WeightDiscrepancyController;
 use App\Http\Middleware\RequirePasswordChange;
 use Illuminate\Support\Facades\Route;
 
@@ -116,6 +118,10 @@ Route::prefix('panel')->name('staff.')->group(function () {
 
         Route::get('/queue', [QueueController::class, 'index'])->name('queue.index');
         Route::get('/queue/{appointment}', [QueueController::class, 'show'])->name('queue.show');
+
+        // تعیین تکلیفِ توزینِ مغایر — کارِ مدیریت، نه باسکول‌بان
+        Route::post('/queue/{appointment}/weight-discrepancy', [WeightDiscrepancyController::class, 'store'])
+            ->name('queue.weight-discrepancy');
         Route::post('/queue/{appointment}/transition', [QueueController::class, 'transition'])
             ->name('queue.transition');
         Route::post('/queue/{appointment}/priority', [QueueController::class, 'prioritize'])
@@ -147,6 +153,13 @@ Route::prefix('panel')->name('staff.')->group(function () {
         Route::put('/settings/sms', [SmsSettingsController::class, 'update'])->name('settings.sms.update');
         Route::post('/settings/sms/test', [SmsSettingsController::class, 'test'])->name('settings.sms.test');
         Route::post('/settings/sms/probe', [SmsSettingsController::class, 'probe'])->name('settings.sms.probe');
+
+        // متن پیامک‌ها — جدا از تنظیمات پنل، چون کارِ متفاوتی است
+        Route::get('/settings/sms-templates', [SmsTemplateController::class, 'index'])->name('settings.sms-templates');
+        Route::put('/settings/sms-templates/{template}', [SmsTemplateController::class, 'update'])
+            ->name('settings.sms-templates.update');
+        Route::post('/settings/sms-templates/{template}/reset', [SmsTemplateController::class, 'reset'])
+            ->name('settings.sms-templates.reset');
     });
 });
 

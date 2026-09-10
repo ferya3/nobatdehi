@@ -160,7 +160,7 @@ trait SeedsFactory
             factory: $factory,
             driver: $driver,
             truck: $truck,
-            product: $product ?? Product::where('factory_id', $factory->id)->firstOrFail(),
+            product: $product ?? Product::where('factory_id', $factory->id)->orderBy('id')->firstOrFail(),
             idempotencyKey: $idempotencyKey,
             ip: '127.0.0.1',
         );

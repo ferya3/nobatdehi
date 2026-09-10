@@ -237,6 +237,6 @@ final class TruckTypeManagementTest extends TestCase
 
         $this->artisan('appointments:no-show')->assertSuccessful();
 
-        $this->assertSame(AppointmentStatus::Booked, $appointment->refresh()->status);
+        $this->assertSame(AppointmentStatus::Waiting, $appointment->refresh()->status);
     }
 }

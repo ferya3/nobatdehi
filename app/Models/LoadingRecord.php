@@ -24,6 +24,7 @@ class LoadingRecord extends Model
             'gross_weighed_at' => 'datetime',
             'exit_permit_issued_at' => 'datetime',
             'discrepancy_alerted_at' => 'datetime',
+            'discrepancy_decided_at' => 'datetime',
         ];
     }
 
@@ -47,6 +48,11 @@ class LoadingRecord extends Model
         return $this->belongsTo(User::class, 'gross_by_user_id');
     }
 
+    public function discrepancyDecidedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'discrepancy_decided_by_user_id');
+    }
+
     public function hasTare(): bool
     {
         return $this->empty_weight_kg !== null;
@@ -55,5 +61,13 @@ class LoadingRecord extends Model
     public function hasGross(): bool
     {
         return $this->loaded_weight_kg !== null;
+    }
+
+    /** توزینی که مغایرت داشته و هنوز کسی درباره‌اش تصمیم نگرفته */
+    public function awaitsDecision(): bool
+    {
+        return $this->discrepancy_kind !== null
+            && $this->discrepancy_decision === null
+            && $this->exit_permit_number === null;
     }
 }

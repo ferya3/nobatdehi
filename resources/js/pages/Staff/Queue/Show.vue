@@ -1,13 +1,17 @@
 <script setup lang="ts">
+import AlertBox from '@/components/AlertBox.vue';
+import AppButton from '@/components/AppButton.vue';
 import PlateBadge from '@/components/PlateBadge.vue';
 import StatusBadge from '@/components/StatusBadge.vue';
 import StaffLayout from '@/layouts/StaffLayout.vue';
 import { duration } from '@/lib/format';
-import type { Appointment, StatusTone } from '@/types';
-import { Link } from '@inertiajs/vue3';
+import type { Appointment, PageProps, StatusTone } from '@/types';
+import { Link, useForm, usePage } from '@inertiajs/vue3';
+import { computed, ref } from 'vue';
 
-defineProps<{
+const props = defineProps<{
     appointment: Appointment & { wait_minutes: number | null; loading_minutes: number | null };
+    mayResolveWeight?: boolean;
     timeline: {
         id: number;
         from: string | null;
@@ -21,8 +25,37 @@ defineProps<{
     }[];
 }>();
 
+const page = usePage<PageProps>();
+const flash = computed(() => page.props.flash);
+
 const kg = (value: string | null | undefined) =>
     value === null || value === undefined ? '—' : Number(value).toLocaleString('en-US');
+
+/**
+ * تعیین تکلیفِ مغایرت.
+ *
+ * قفلِ برگه‌ی خروج تا اینجا هیچ کلیدی نداشت؛ کامیون در محوطه می‌ماند و کسی
+ * جز دست بردن در دیتابیس کاری از دستش برنمی‌آمد.
+ */
+const decision = useForm({ decision: '', reason: '' });
+
+const deciding = ref(false);
+
+const canDecide = computed(() => decision.reason.trim().length >= 8 && decision.decision !== '');
+
+function decide(value: 'approved' | 'rejected') {
+    decision.decision = value;
+
+    if (!canDecide.value) return;
+
+    decision.post(route('staff.queue.weight-discrepancy', props.appointment.ulid), {
+        preserveScroll: true,
+        onSuccess: () => {
+            decision.reset();
+            deciding.value = false;
+        },
+    });
+}
 </script>
 
 <template>
@@ -31,6 +64,9 @@ const kg = (value: string | null | undefined) =>
             <Link :href="route('staff.queue.index')" class="text-sm text-slate-500 transition hover:text-slate-700">
                 ← بازگشت به صف
             </Link>
+
+            <AlertBox v-if="flash.success" tone="success">{{ flash.success }}</AlertBox>
+            <AlertBox v-if="flash.error" tone="error">{{ flash.error }}</AlertBox>
 
             <div class="grid gap-5 lg:grid-cols-3">
                 <section class="card space-y-4 p-5 lg:col-span-2">
@@ -223,15 +259,83 @@ const kg = (value: string | null | undefined) =>
                         برگه خروج <span class="num">{{ appointment.weighing.exit_permit_number }}</span> صادر شد.
                     </p>
 
-                    <p
-                        v-else-if="appointment.weighing.discrepancy"
-                        class="rounded-xl bg-rose-50 px-4 py-3 text-sm font-medium text-rose-900"
-                    >
-                        برگه خروج تا تعیین تکلیف صادر نمی‌شود.
-                        <span v-if="appointment.weighing.alerted_at" class="block text-xs font-normal">
-                            اخطار برای مدیر ارسال شد.
-                        </span>
-                    </p>
+                    <template v-else-if="appointment.weighing.discrepancy">
+                        <p class="rounded-xl bg-rose-50 px-4 py-3 text-sm font-medium text-rose-900">
+                            برگه خروج تا تعیین تکلیف صادر نمی‌شود.
+                            <span v-if="appointment.weighing.alerted_at" class="block text-xs font-normal">
+                                اخطار برای مدیر ارسال شد.
+                            </span>
+                        </p>
+
+                        <!-- تصمیمی که قبلاً گرفته شده -->
+                        <div
+                            v-if="appointment.weighing.decision"
+                            class="rounded-xl border px-4 py-3 text-sm"
+                            :class="
+                                appointment.weighing.decision === 'approved'
+                                    ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
+                                    : 'border-slate-200 bg-slate-50 text-slate-800'
+                            "
+                        >
+                            <p class="font-semibold">
+                                {{ appointment.weighing.decision === 'approved' ? 'مغایرت تأیید شد' : 'مغایرت رد شد' }}
+                            </p>
+                            <p class="mt-1 text-xs">{{ appointment.weighing.decision_reason }}</p>
+                            <p v-if="appointment.weighing.decided_by" class="mt-1 text-xs opacity-75">
+                                {{ appointment.weighing.decided_by }}
+                            </p>
+                        </div>
+
+                        <!-- یا تصمیمی که باید گرفته شود -->
+                        <div v-else-if="mayResolveWeight && appointment.weighing.awaits_decision" class="space-y-3">
+                            <AppButton v-if="!deciding" variant="secondary" @click="deciding = true">
+                                تعیین تکلیف
+                            </AppButton>
+
+                            <template v-else>
+                                <div>
+                                    <label for="decision_reason" class="text-xs font-medium text-slate-600">
+                                        دلیل تصمیم — در سابقه به نام شما می‌ماند
+                                    </label>
+                                    <textarea
+                                        id="decision_reason"
+                                        v-model="decision.reason"
+                                        rows="2"
+                                        placeholder="مثلاً: اختلاف ناشی از رطوبت بار است و مورد قبول واحد فروش قرار گرفت"
+                                        class="mt-1 block w-full rounded-xl border border-slate-300 px-3 py-2 text-sm transition focus:outline-none focus:ring-2 focus:ring-brand-200"
+                                    />
+                                    <p v-if="decision.errors.reason" class="mt-1 text-xs text-rose-600">
+                                        {{ decision.errors.reason }}
+                                    </p>
+                                </div>
+
+                                <div class="flex flex-wrap gap-2">
+                                    <AppButton
+                                        :disabled="decision.reason.trim().length < 8"
+                                        :loading="decision.processing"
+                                        @click="decide('approved')"
+                                    >
+                                        تأیید و صدور برگه خروج
+                                    </AppButton>
+
+                                    <AppButton
+                                        variant="secondary"
+                                        :disabled="decision.reason.trim().length < 8"
+                                        :loading="decision.processing"
+                                        @click="decide('rejected')"
+                                    >
+                                        رد — بار اصلاح و دوباره وزن شود
+                                    </AppButton>
+
+                                    <AppButton variant="secondary" @click="deciding = false">انصراف</AppButton>
+                                </div>
+                            </template>
+                        </div>
+
+                        <AlertBox v-else-if="appointment.weighing.awaits_decision" tone="warning">
+                            تعیین تکلیف این مغایرت با مدیر کارخانه است.
+                        </AlertBox>
+                    </template>
                 </section>
 
                 <section class="card p-5">

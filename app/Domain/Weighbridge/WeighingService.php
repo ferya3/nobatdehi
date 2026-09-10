@@ -80,12 +80,30 @@ final class WeighingService
         );
     }
 
-    /** تناژ حواله بر حسب کیلوگرم */
+    /**
+     * تناژی که از این کامیون انتظار می‌رود، بر حسب کیلوگرم.
+     *
+     * تناژ روی محصول تعریف می‌شود («هر بارگیریِ این محصول ۳۰ تن») ولی
+     * کامیون است که آن را می‌برد. یک تکِ ده‌تنی هرگز به سی تن نمی‌رسد؛
+     * سنجیدنش با عددِ محصول یعنی هر بارگیریِ تک، «مغایرت» می‌شود و چند روز
+     * بعد کسی دیگر این هشدار را جدی نمی‌گیرد.
+     *
+     * محصولی که تناژ تعریف‌شده ندارد، عمداً بی‌مقایسه می‌ماند: کارخانه
+     * نگفته چقدر انتظار دارد، پس سامانه هم از خودش عددی نمی‌سازد.
+     * اضافه‌بار جدا و همیشه سنجیده می‌شود.
+     */
     public function expectedNetKg(Appointment $appointment): ?float
     {
         $tons = $appointment->product?->load_tons;
 
-        return $tons !== null ? round((float) $tons * 1000, 2) : null;
+        if ($tons === null) {
+            return null;
+        }
+
+        $expected = round((float) $tons * 1000, 2);
+        $capacity = $this->capacityKg($appointment);
+
+        return $capacity === null ? $expected : min($expected, $capacity);
     }
 
     /** ظرفیت مجاز کامیون بر حسب کیلوگرم */

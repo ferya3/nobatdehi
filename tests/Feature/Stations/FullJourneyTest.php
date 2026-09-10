@@ -51,7 +51,7 @@ final class FullJourneyTest extends TestCase
         $this->seed(SmsTemplateSeeder::class);
         $this->freezeOnWorkingMorning($this->factory);
 
-        $this->product = Product::where('factory_id', $this->factory->id)->firstOrFail();
+        $this->product = Product::where('factory_id', $this->factory->id)->orderBy('id')->firstOrFail();
 
         Setting::putMany(['sms_provider' => 'console']);
     }
@@ -104,7 +104,7 @@ final class FullJourneyTest extends TestCase
 
         $appointment = Appointment::firstOrFail();
 
-        $this->assertSame(AppointmentStatus::Booked, $appointment->status);
+        $this->assertSame(AppointmentStatus::Waiting, $appointment->status);
         $this->assertNotNull($appointment->start_time, 'سامانه باید خودش ساعت اعلام کند.');
 
         // راننده نوبتش را می‌بیند و QR می‌گیرد
@@ -123,7 +123,7 @@ final class FullJourneyTest extends TestCase
             ->assertOk()
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->where('appointments.0.number', $appointment->number)
-                ->where('appointments.0.status', AppointmentStatus::Booked->value));
+                ->where('appointments.0.status', AppointmentStatus::Waiting->value));
 
         // ---------------------------------------------- ۳) نگهبانی: اسکن و ورود
         $guard = $this->person(Roles::GATE);

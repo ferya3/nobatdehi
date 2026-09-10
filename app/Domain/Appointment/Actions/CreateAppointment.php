@@ -73,7 +73,14 @@ final class CreateAppointment
                 'start_time' => $opening->startTime(),
                 'end_time' => $opening->endTime(),
                 'line_no' => $opening->line,
-                'status' => AppointmentStatus::Booked,
+                // راننده که نوبت گرفت، در صف است. مرحله‌ی جداگانه‌ی «ثبت‌شده»
+                // یعنی هر نوبت منتظر یک کلیکِ اپراتور می‌ماند تا دیده شود —
+                // کاری که هیچ تصمیمی در آن نیست.
+                'status' => AppointmentStatus::Waiting,
+                // مُهرِ ورود به صف را هم همین‌جا می‌زنیم: چون دیگر انتقالی
+                // به WAITING رخ نمی‌دهد، جای دیگری آن را نمی‌نویسد و «چقدر
+                // منتظر مانده» بی‌جواب می‌ماند.
+                'waiting_at' => now(),
                 'idempotency_key' => $data->idempotencyKey,
                 'created_by_user_id' => $data->createdByUserId,
                 'created_ip' => $data->ip,
@@ -87,7 +94,7 @@ final class CreateAppointment
 
             $appointment->transitions()->create([
                 'from_status' => null,
-                'to_status' => AppointmentStatus::Booked,
+                'to_status' => AppointmentStatus::Waiting,
                 'driver_id' => $data->createdByUserId ? null : $data->driver->id,
                 'user_id' => $data->createdByUserId,
                 'actor_label' => $data->createdByUserId ? null : 'راننده',

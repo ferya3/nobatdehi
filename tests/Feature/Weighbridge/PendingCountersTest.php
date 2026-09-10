@@ -45,7 +45,7 @@ final class PendingCountersTest extends TestCase
         $this->freezeOnWorkingMorning($this->factory);
         $this->factory->update(['max_active_per_plate' => 5]);
 
-        $this->product = Product::where('factory_id', $this->factory->id)->firstOrFail();
+        $this->product = Product::where('factory_id', $this->factory->id)->orderBy('id')->firstOrFail();
     }
 
     private function scaleman(): User

@@ -47,7 +47,7 @@ final class ResetOperationalDataTest extends TestCase
     /** یک روزِ کاریِ کامل: نوبت، ورود، توزین، بارگیری */
     protected function aDaysWork(): Appointment
     {
-        $product = Product::where('factory_id', $this->factory->id)->firstOrFail();
+        $product = Product::where('factory_id', $this->factory->id)->orderBy('id')->firstOrFail();
 
         $appointment = app(CreateAppointment::class)($this->booking(
             $this->factory,

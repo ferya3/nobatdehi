@@ -63,7 +63,7 @@ final class TransitionAppointmentTest extends TestCase
         $appointment = $this->bookOne();
         $actor = Actor::user($this->operator(), '10.0.0.1');
 
-        foreach ([S::Waiting, S::Called, S::CheckedIn, S::Loading, S::Loaded, S::Completed] as $status) {
+        foreach ([S::Called, S::CheckedIn, S::Loading, S::Loaded, S::Completed] as $status) {
             if ($status === S::Loading) {
                 $this->recordTare($appointment);
             }
@@ -83,8 +83,9 @@ final class TransitionAppointmentTest extends TestCase
         $this->assertNotNull($appointment->loading_completed_at);
         $this->assertNotNull($appointment->completed_at);
 
-        // شش انتقال + یکی برای خود صدور نوبت
-        $this->assertSame(7, $appointment->transitions()->count());
+        // پنج انتقال + یکی برای خود صدور نوبت. نوبت از همان اول «در انتظار»
+        // صادر می‌شود، پس قدمِ جداگانه‌ای برای آن وجود ندارد.
+        $this->assertSame(6, $appointment->transitions()->count());
     }
 
     #[Test]

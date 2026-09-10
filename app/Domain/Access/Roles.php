@@ -53,7 +53,7 @@ final class Roles
             self::FACTORY_MANAGER => array_merge($operator, [
                 P::APPOINTMENTS_REJECT, P::APPOINTMENTS_ROLLBACK,
                 P::REPORTS_VIEW, P::SETTINGS_MANAGE, P::PRODUCTS_MANAGE,
-                P::USERS_MANAGE, P::AUDIT_VIEW, P::WEIGHING_RECORD,
+                P::USERS_MANAGE, P::AUDIT_VIEW, P::WEIGHING_RECORD, P::WEIGHING_RESOLVE,
                 // استثنای گیت دستِ مدیر است، نه دستِ خودِ نگهبان
                 P::GATE_MANUAL_OVERRIDE,
             ]),

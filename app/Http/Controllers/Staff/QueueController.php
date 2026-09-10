@@ -136,12 +136,13 @@ class QueueController extends Controller
 
         $appointment->load([
             'driver', 'truck.truckType', 'product', 'loadingPoint',
-            'transitions.user', 'transitions.driver', 'loadingRecord',
+            'transitions.user', 'transitions.driver', 'loadingRecord.discrepancyDecidedBy',
             'gatePlateReading',
         ]);
 
         return Inertia::render('Staff/Queue/Show', [
             'appointment' => $this->rowFor($request, $appointment),
+            'mayResolveWeight' => (bool) $request->user()?->can(Permissions::WEIGHING_RESOLVE),
             'timeline' => $appointment->transitions->map(fn ($t) => [
                 'id' => $t->id,
                 'from' => $t->from_status?->label(),

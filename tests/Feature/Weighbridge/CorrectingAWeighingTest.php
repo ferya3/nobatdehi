@@ -52,7 +52,7 @@ final class CorrectingAWeighingTest extends TestCase
         $this->seed(SmsTemplateSeeder::class);
         $this->freezeOnWorkingMorning($this->factory);
 
-        $this->product = Product::where('factory_id', $this->factory->id)->firstOrFail();
+        $this->product = Product::where('factory_id', $this->factory->id)->orderBy('id')->firstOrFail();
 
         Setting::putMany(['sms_provider' => 'console']);
     }

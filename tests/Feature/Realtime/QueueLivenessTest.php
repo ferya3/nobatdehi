@@ -51,7 +51,7 @@ final class QueueLivenessTest extends TestCase
             factory: $this->factory,
             driver: $this->makeDriver($mobile),
             truck: $this->makeTruck($two, 'ب', '345', '11'),
-            product: Product::where('factory_id', $this->factory->id)->firstOrFail(),
+            product: Product::where('factory_id', $this->factory->id)->orderBy('id')->firstOrFail(),
             ip: '127.0.0.1',
         ));
     }
@@ -82,7 +82,7 @@ final class QueueLivenessTest extends TestCase
         Event::fake([QueueChanged::class]);
         Queue::fake();
 
-        app(TransitionAppointment::class)($appointment, AppointmentStatus::Waiting, Actor::system());
+        app(TransitionAppointment::class)($appointment, AppointmentStatus::Called, Actor::system());
 
         Event::assertDispatched(QueueChanged::class);
     }

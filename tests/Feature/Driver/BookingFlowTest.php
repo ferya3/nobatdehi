@@ -50,7 +50,7 @@ final class BookingFlowTest extends TestCase
             'plate_three' => '345',
             'plate_iran' => '67',
             'truck_type_id' => TruckType::where('code', 'teriler')->value('id'),
-            'product_id' => Product::where('factory_id', $this->factory->id)->value('id'),
+            'product_id' => Product::where('factory_id', $this->factory->id)->orderBy('id')->value('id'),
             'idempotency_key' => 'test-'.uniqid(),
         ], $overrides);
     }
@@ -84,7 +84,7 @@ final class BookingFlowTest extends TestCase
 
         $appointment = Appointment::firstOrFail();
 
-        $this->assertSame(AppointmentStatus::Booked, $appointment->status);
+        $this->assertSame(AppointmentStatus::Waiting, $appointment->status);
         $this->assertSame($this->driver->id, $appointment->driver_id);
         $this->assertSame('12-ب-345-67', $appointment->truck->plate_key);
         $this->assertSame('علی رضایی', $this->driver->fresh()->name);

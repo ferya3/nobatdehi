@@ -213,7 +213,7 @@ final class GateDevicesTest extends TestCase
         // راهبند باز نشد، ولی عکسِ پلاکِ مغایر در سابقه‌ی همان نوبت ماند
         $this->assertSame($appointment->id, $reading->appointment_id);
         $this->assertSame('99-ب-888-22', $reading->plate_key);
-        $this->assertSame(AppointmentStatus::Booked, $appointment->refresh()->status);
+        $this->assertSame(AppointmentStatus::Waiting, $appointment->refresh()->status);
     }
 
     #[Test]
@@ -249,7 +249,7 @@ final class GateDevicesTest extends TestCase
             ->post(route('staff.gate.check-in', $appointment), ['plate_reading_id' => $reading->id])
             ->assertSessionHas('error');
 
-        $this->assertSame(AppointmentStatus::Booked, $appointment->refresh()->status);
+        $this->assertSame(AppointmentStatus::Waiting, $appointment->refresh()->status);
     }
 
     // ------------------------------------------------- حرفِ دوربین بالاتر است
@@ -270,7 +270,7 @@ final class GateDevicesTest extends TestCase
             ])
             ->assertSessionHas('error');
 
-        $this->assertSame(AppointmentStatus::Booked, $appointment->refresh()->status);
+        $this->assertSame(AppointmentStatus::Waiting, $appointment->refresh()->status);
 
         $this->assertDatabaseHas('security_logs', [
             'event' => SecurityLogger::GATE_PLATE_MISMATCH,
@@ -295,7 +295,7 @@ final class GateDevicesTest extends TestCase
             ->post(route('staff.gate.check-in', $appointment), ['plate_reading_id' => $reading->id])
             ->assertSessionHas('error');
 
-        $this->assertSame(AppointmentStatus::Booked, $appointment->refresh()->status);
+        $this->assertSame(AppointmentStatus::Waiting, $appointment->refresh()->status);
     }
 
     #[Test]
@@ -317,7 +317,7 @@ final class GateDevicesTest extends TestCase
             ->post(route('staff.gate.check-in', $appointment), ['plate_reading_id' => $reading->id])
             ->assertSessionHas('error');
 
-        $this->assertSame(AppointmentStatus::Booked, $appointment->refresh()->status);
+        $this->assertSame(AppointmentStatus::Waiting, $appointment->refresh()->status);
     }
 
     #[Test]

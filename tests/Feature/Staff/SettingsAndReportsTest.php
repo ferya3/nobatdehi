@@ -291,7 +291,7 @@ final class SettingsAndReportsTest extends TestCase
         $operator = $this->staff(Roles::OPERATOR);
         $transition = app(TransitionAppointment::class);
 
-        foreach ([S::Waiting, S::Called] as $status) {
+        foreach ([S::Called] as $status) {
             $transition($appointment->fresh(), $status, Actor::user($operator));
         }
 
@@ -299,7 +299,7 @@ final class SettingsAndReportsTest extends TestCase
             ->get(route('staff.reports'))
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->where('byOperator.0.name', $operator->name)
-                ->where('byOperator.0.actions', 2)
+                ->where('byOperator.0.actions', 1)
                 ->where('byOperator.0.rollbacks', 0));
     }
 

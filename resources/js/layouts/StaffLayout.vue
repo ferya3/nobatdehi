@@ -40,7 +40,8 @@ const SETTINGS = [
     { label: 'محصولات', name: 'staff.products.index', pattern: 'staff.products.*', permission: 'products.manage' },
     { label: 'انواع کامیون', name: 'staff.truck-types.index', pattern: 'staff.truck-types.*', permission: 'products.manage' },
     { label: 'دستگاه‌های گیت', name: 'staff.settings.devices', pattern: 'staff.settings.devices*', permission: 'settings.manage' },
-    { label: 'پیامک', name: 'staff.settings.sms', pattern: 'staff.settings.sms*', permission: 'settings.manage' },
+    { label: 'پیامک', name: 'staff.settings.sms', pattern: 'staff.settings.sms', permission: 'settings.manage' },
+    { label: 'متن پیامک‌ها', name: 'staff.settings.sms-templates', pattern: 'staff.settings.sms-templates*', permission: 'settings.manage' },
 ];
 
 type NavItem = { label: string; href: string; active: boolean };

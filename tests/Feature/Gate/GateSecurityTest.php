@@ -83,7 +83,7 @@ final class GateSecurityTest extends TestCase
             ->post(route('staff.gate.check-in', $appointment), ['plate_match' => true])
             ->assertSessionHas('error');
 
-        $this->assertSame(AppointmentStatus::Booked, $appointment->refresh()->status);
+        $this->assertSame(AppointmentStatus::Waiting, $appointment->refresh()->status);
 
         $this->assertDatabaseHas('security_logs', [
             'event' => SecurityLogger::GATE_NO_QR,
@@ -107,7 +107,7 @@ final class GateSecurityTest extends TestCase
             ->post(route('staff.gate.check-in', $appointment), ['plate_match' => true])
             ->assertSessionHas('error');
 
-        $this->assertSame(AppointmentStatus::Booked, $appointment->refresh()->status);
+        $this->assertSame(AppointmentStatus::Waiting, $appointment->refresh()->status);
     }
 
     #[Test]
@@ -141,7 +141,7 @@ final class GateSecurityTest extends TestCase
             ->post(route('staff.gate.check-in', $appointment), ['plate_match' => false])
             ->assertSessionHas('error');
 
-        $this->assertSame(AppointmentStatus::Booked, $appointment->refresh()->status);
+        $this->assertSame(AppointmentStatus::Waiting, $appointment->refresh()->status);
 
         $this->assertDatabaseHas('security_logs', [
             'event' => SecurityLogger::GATE_PLATE_MISMATCH,
@@ -165,7 +165,7 @@ final class GateSecurityTest extends TestCase
             ])
             ->assertSessionHas('error');
 
-        $this->assertSame(AppointmentStatus::Booked, $appointment->refresh()->status);
+        $this->assertSame(AppointmentStatus::Waiting, $appointment->refresh()->status);
     }
 
     #[Test]
@@ -199,7 +199,7 @@ final class GateSecurityTest extends TestCase
             ->post(route('staff.gate.check-in', $appointment), ['plate_match' => true])
             ->assertSessionHas('error');
 
-        $this->assertSame(AppointmentStatus::Booked, $appointment->refresh()->status);
+        $this->assertSame(AppointmentStatus::Waiting, $appointment->refresh()->status);
 
         // با دلیل: ثبت می‌شود و به‌عنوان «دستی» علامت می‌خورد
         $this->actingAs($manager)
@@ -238,7 +238,7 @@ final class GateSecurityTest extends TestCase
             ->assertSessionHas('success');
 
         // برگرداندن وضعیت و تلاش دوباره با همان session: بلیط مصرف شده است
-        $appointment->forceFill(['status' => AppointmentStatus::Booked->value])->save();
+        $appointment->forceFill(['status' => AppointmentStatus::Waiting->value])->save();
 
         $this->actingAs($guard)
             ->post(route('staff.gate.check-in', $appointment), ['plate_match' => true])

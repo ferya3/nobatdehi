@@ -34,6 +34,15 @@ final class Permissions
 
     public const WEIGHING_RECORD = 'weighing.record';
 
+    /**
+     * تعیین تکلیفِ توزینِ مغایر.
+     *
+     * عمداً از weighing.record جداست: باسکول‌بان وزن را می‌خواند، ولی
+     * «این اختلاف قابل قبول است» تصمیمِ کسی است که پاسخگوی تناژِ فروخته‌شده
+     * باشد. اگر هر دو یکی بودند، قفلِ مغایرت هیچ معنایی نداشت.
+     */
+    public const WEIGHING_RESOLVE = 'weighing.resolve';
+
     public const DASHBOARD_VIEW = 'dashboard.view';
     public const REPORTS_VIEW = 'reports.view';
 
@@ -65,6 +74,7 @@ final class Permissions
             self::APPOINTMENTS_ROLLBACK => 'بازگرداندن وضعیت نوبت',
 
             self::WEIGHING_RECORD => 'ثبت وزن باسکول',
+            self::WEIGHING_RESOLVE => 'تعیین تکلیف مغایرت وزن',
 
             self::DASHBOARD_VIEW => 'مشاهده داشبورد',
             self::REPORTS_VIEW => 'مشاهده گزارش‌ها',

@@ -45,7 +45,7 @@ final class PlateLookupTest extends TestCase
         $this->factory = $this->seedFactory();
         $this->freezeOnWorkingMorning($this->factory);
 
-        $this->product = Product::where('factory_id', $this->factory->id)->firstOrFail();
+        $this->product = Product::where('factory_id', $this->factory->id)->orderBy('id')->firstOrFail();
         $this->truck = $this->makeTruck('12', 'ب', '345', '11');
     }
 

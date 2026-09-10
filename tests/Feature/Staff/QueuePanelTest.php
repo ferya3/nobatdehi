@@ -127,7 +127,6 @@ final class QueuePanelTest extends TestCase
         $line = LoadingPoint::where('factory_id', $this->factory->id)->firstOrFail();
 
         $steps = [
-            [S::Waiting, []],
             [S::Called, []],
             [S::CheckedIn, []],
             [S::Loading, ['loading_point_id' => $line->id]],
@@ -194,7 +193,7 @@ final class QueuePanelTest extends TestCase
             ->post(route('staff.queue.transition', $appointment), ['to' => S::Waiting->value])
             ->assertSessionHas('error');
 
-        $this->assertSame(S::Booked, $appointment->fresh()->status);
+        $this->assertSame(S::Waiting, $appointment->fresh()->status);
     }
 
     #[Test]
@@ -203,8 +202,7 @@ final class QueuePanelTest extends TestCase
         $appointment = $this->todayAppointment();
         $operator = $this->staff(Roles::OPERATOR);
 
-        $this->actingAs($operator)->post(route('staff.queue.transition', $appointment), ['to' => S::Waiting->value]);
-        $this->actingAs($operator)->post(route('staff.queue.transition', $appointment->fresh()), ['to' => S::Called->value]);
+        $this->actingAs($operator)->post(route('staff.queue.transition', $appointment), ['to' => S::Called->value]);
 
         $this->actingAs($operator)
             ->get(route('staff.queue.index'))
@@ -222,7 +220,7 @@ final class QueuePanelTest extends TestCase
         $appointment = $this->todayAppointment();
         $manager = $this->staff(Roles::FACTORY_MANAGER);
 
-        foreach ([S::Waiting, S::Called, S::CheckedIn] as $status) {
+        foreach ([S::Called, S::CheckedIn] as $status) {
             $this->actingAs($manager)->post(route('staff.queue.transition', $appointment->fresh()), ['to' => $status->value]);
         }
 
@@ -254,7 +252,7 @@ final class QueuePanelTest extends TestCase
             ->post(route('staff.queue.transition', $appointment), ['to' => S::Completed->value])
             ->assertSessionHas('error');
 
-        $this->assertSame(S::Booked, $appointment->fresh()->status);
+        $this->assertSame(S::Waiting, $appointment->fresh()->status);
     }
 
     #[Test]
@@ -263,7 +261,7 @@ final class QueuePanelTest extends TestCase
         $appointment = $this->todayAppointment();
         $operator = $this->staff(Roles::OPERATOR);
 
-        $this->actingAs($operator)->post(route('staff.queue.transition', $appointment), ['to' => S::Waiting->value]);
+        $this->actingAs($operator)->post(route('staff.queue.transition', $appointment), ['to' => S::Called->value]);
 
         $this->actingAs($operator)
             ->get(route('staff.queue.show', $appointment))
@@ -314,7 +312,7 @@ final class QueuePanelTest extends TestCase
 
         $this->artisan('appointments:expire')->assertSuccessful();
 
-        $this->assertSame(S::Booked, $appointment->fresh()->status);
+        $this->assertSame(S::Waiting, $appointment->fresh()->status);
     }
 
     #[Test]

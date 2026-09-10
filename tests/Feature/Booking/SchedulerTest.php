@@ -245,7 +245,7 @@ final class SchedulerTest extends TestCase
                 str_pad((string) random_int(10, 99), 2, '0'), 'ب',
                 str_pad((string) random_int(100, 999), 3, '0'), '67',
             )->id,
-            'product_id' => Product::where('factory_id', $this->factory->id)->firstOrFail()->id,
+            'product_id' => Product::where('factory_id', $this->factory->id)->orderBy('id')->firstOrFail()->id,
             'date' => $opening->date->toDateString(),
             'start_time' => $opening->startTime(),
             'end_time' => $opening->endTime(),

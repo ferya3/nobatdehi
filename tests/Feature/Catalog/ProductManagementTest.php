@@ -73,7 +73,7 @@ final class ProductManagementTest extends TestCase
     #[Test]
     public function test_renaming_a_product_is_exactly_what_the_panel_is_for(): void
     {
-        $product = Product::where('factory_id', $this->factory->id)->firstOrFail();
+        $product = Product::where('factory_id', $this->factory->id)->orderBy('id')->firstOrFail();
 
         $this->actingAs($this->manager())
             ->put(route('staff.products.update', $product), $this->payload([
@@ -88,7 +88,7 @@ final class ProductManagementTest extends TestCase
     #[Test]
     public function test_a_duplicate_code_inside_the_same_factory_is_rejected(): void
     {
-        $existing = Product::where('factory_id', $this->factory->id)->firstOrFail();
+        $existing = Product::where('factory_id', $this->factory->id)->orderBy('id')->firstOrFail();
 
         $this->actingAs($this->manager())
             ->post(route('staff.products.store'), $this->payload(['code' => $existing->code]))
@@ -98,7 +98,7 @@ final class ProductManagementTest extends TestCase
     #[Test]
     public function test_a_product_used_by_an_appointment_is_not_deleted(): void
     {
-        $product = Product::where('factory_id', $this->factory->id)->firstOrFail();
+        $product = Product::where('factory_id', $this->factory->id)->orderBy('id')->firstOrFail();
 
         app(CreateAppointment::class)($this->booking(
             $this->factory,
@@ -156,7 +156,7 @@ final class ProductManagementTest extends TestCase
     #[Test]
     public function test_a_deactivated_product_disappears_from_the_booking_form(): void
     {
-        $product = Product::where('factory_id', $this->factory->id)->firstOrFail();
+        $product = Product::where('factory_id', $this->factory->id)->orderBy('id')->firstOrFail();
 
         $this->actingAs($this->manager())
             ->put(route('staff.products.update', $product), $this->payload([

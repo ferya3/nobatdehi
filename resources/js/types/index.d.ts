@@ -128,6 +128,11 @@ export interface Appointment {
         discrepancy_label: string | null;
         alerted_at: string | null;
         exit_permit_number: string | null;
+        awaits_decision?: boolean;
+        decision?: 'approved' | 'rejected' | null;
+        decision_reason?: string | null;
+        decided_by?: string | null;
+        decided_at?: string | null;
     } | null;
     gate?: {
         entry_method: string | null;
