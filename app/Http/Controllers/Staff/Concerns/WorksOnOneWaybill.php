@@ -47,13 +47,35 @@ trait WorksOnOneWaybill
         return is_string($notice) ? $notice : null;
     }
 
-    /** برگشت به صفحه‌ی ایستگاه — همیشه به یک نشانیِ GET */
+    /**
+     * برگشت به صفحه‌ی ایستگاه — همیشه به یک نشانیِ GET.
+     *
+     * کنسولِ یکجا همین کارها را انجام می‌دهد ولی صفحه‌اش را ترک نمی‌کند:
+     * اپراتوری که از آنجا ورود ثبت کرده نباید ناگهان روی صفحه‌ی نگهبانی
+     * بیفتد و جای خودش را در صف گم کند.
+     */
     private function toStation(?Appointment $appointment = null): RedirectResponse
     {
+        $route = request()->boolean('console') ? 'staff.console' : $this->stationRoute();
+
         return redirect()->route(
-            $this->stationRoute(),
+            $route,
             $appointment === null ? [] : ['waybill' => $appointment->ulid],
         );
+    }
+
+    /**
+     * کارِ این ایستگاه روی این حواله تمام شد.
+     *
+     * روی صفحه‌ی ایستگاه، یعنی «نفر بعدی»: صفحه پاک می‌شود و آماده‌ی کامیون
+     * بعدی است. روی کنسول برعکس — همان کامیون می‌ماند، چون کارِ بعدی‌اش
+     * همان‌جا و یک قدم پایین‌تر باز می‌شود.
+     */
+    private function stationDone(Appointment $appointment): RedirectResponse
+    {
+        return request()->boolean('console')
+            ? $this->toStation($appointment)
+            : redirect()->route($this->stationRoute());
     }
 
     /** نام مسیرِ GET همین ایستگاه */

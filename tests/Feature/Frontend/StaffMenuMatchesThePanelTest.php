@@ -58,14 +58,14 @@ final class StaffMenuMatchesThePanelTest extends TestCase
     /**
      * منوی StaffLayout، همان‌طور که در کد نوشته شده.
      *
-     * @return array<int, array{label: string, name: string, permission: string}>
+     * @return array<int, array{label: string, name: string, permissions: array<int, string>}>
      */
     private function menu(): array
     {
         $code = (string) file_get_contents(resource_path('js/layouts/StaffLayout.vue'));
 
         preg_match_all(
-            "/\{\s*label:\s*'([^']+)',\s*name:\s*'([^']+)',\s*pattern:\s*'[^']*',\s*permission:\s*'([^']+)'\s*\}/",
+            "/label:\s*'([^']+)',\s*name:\s*'([^']+)',\s*pattern:\s*'[^']*',\s*\n?\s*(?:\/\/[^\n]*\n\s*)?permission:\s*(\[[^\]]*\]|'[^']+')/",
             $code,
             $matches,
             PREG_SET_ORDER,
@@ -73,11 +73,23 @@ final class StaffMenuMatchesThePanelTest extends TestCase
 
         $this->assertNotEmpty($matches, 'منوی StaffLayout خوانده نشد — شکل تعریفش عوض شده است.');
 
-        return array_map(fn (array $m) => [
-            'label' => $m[1],
-            'name' => $m[2],
-            'permission' => $m[3],
-        ], $matches);
+        return array_map(function (array $m) {
+            preg_match_all("/'([^']+)'/", $m[3], $names);
+
+            return ['label' => $m[1], 'name' => $m[2], 'permissions' => $names[1]];
+        }, $matches);
+    }
+
+    /** این کاربر این آیتمِ منو را می‌بیند؟ — هرکدام از دسترسی‌ها کافی است */
+    private function sees(User $user, array $item): bool
+    {
+        foreach ($item['permissions'] as $permission) {
+            if ($user->can($permission)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function person(string $role): User
@@ -110,7 +122,7 @@ final class StaffMenuMatchesThePanelTest extends TestCase
             $user = $this->person($role);
 
             foreach ($this->menu() as $item) {
-                if (! $user->can($item['permission'])) {
+                if (! $this->sees($user, $item)) {
                     continue;
                 }
 
@@ -128,7 +140,6 @@ final class StaffMenuMatchesThePanelTest extends TestCase
     #[Test]
     public function every_panel_page_a_role_can_open_has_a_link_in_the_menu(): void
     {
-        $inMenu = array_column($this->menu(), 'name');
         $orphans = [];
 
         $pages = collect(app('router')->getRoutes())
@@ -140,16 +151,28 @@ final class StaffMenuMatchesThePanelTest extends TestCase
             ->reject(fn (string $name) => isset(self::REACHED_FROM_ELSEWHERE[$name]))
             ->values();
 
+        $menu = collect($this->menu());
+
         foreach ($this->roles() as $role) {
             $user = $this->person($role);
 
             foreach ($pages as $name) {
-                if (in_array($name, $inMenu, true)) {
+                if ($this->actingAs($user, 'web')->get(route($name))->getStatusCode() !== 200) {
                     continue;
                 }
 
-                if ($this->actingAs($user, 'web')->get(route($name))->getStatusCode() === 200) {
+                $item = $menu->firstWhere('name', $name);
+
+                if ($item === null) {
                     $orphans[] = "{$role}: {$name} باز می‌شود ولی هیچ لینکی در منو ندارد.";
+
+                    continue;
+                }
+
+                // جهتِ دومِ همان خرابی: لینک هست، ولی به این نقش نشان داده
+                // نمی‌شود. صفحه برایش باز است و هیچ راهی به آن نمی‌بیند.
+                if (! $this->sees($user, $item)) {
+                    $orphans[] = "{$role}: {$name} باز می‌شود ولی «{$item['label']}» به او نشان داده نمی‌شود.";
                 }
             }
         }
@@ -171,7 +194,7 @@ final class StaffMenuMatchesThePanelTest extends TestCase
             $canWork = $user->can('queue.start-loading') || $user->can('queue.complete-loading');
             $seesLink = collect($this->menu())
                 ->contains(fn (array $item) => $item['name'] === 'staff.loading.index'
-                    && $user->can($item['permission']));
+                    && $this->sees($user, $item));
 
             if ($canWork && ! $seesLink) {
                 $blind[] = "{$role}: کارِ لاین بارگیری را می‌تواند انجام دهد ولی لینکش را نمی‌بیند.";

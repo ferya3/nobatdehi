@@ -148,8 +148,7 @@ class LoadingController extends Controller
             return $this->toStation($appointment)->with('error', $e->getMessage());
         }
 
-        return redirect()
-            ->route('staff.loading.index')
+        return $this->stationDone($appointment)
             ->with('success', $target === AppointmentStatus::Loading
                 ? 'شروع بارگیری ثبت شد.'
                 : 'پایان بارگیری ثبت شد. کامیون را به باسکول دوم بفرستید.');

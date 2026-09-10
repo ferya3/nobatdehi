@@ -226,8 +226,7 @@ class GateController extends Controller
 
         ScanTicket::consume($request, $appointment);
 
-        return redirect()
-            ->route('staff.gate.index')
+        return $this->stationDone($appointment)
             ->with('success', 'ورود نوبت '.$appointment->number.' ثبت شد.');
     }
 

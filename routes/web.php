@@ -5,6 +5,7 @@ use App\Http\Controllers\Driver\BookingController;
 use App\Http\Controllers\Driver\OtpController;
 use App\Http\Controllers\Staff\Catalog\ProductController;
 use App\Http\Controllers\Staff\Catalog\TruckTypeController;
+use App\Http\Controllers\Staff\ConsoleController;
 use App\Http\Controllers\Staff\DashboardController;
 use App\Http\Controllers\Staff\DeviceSettingsController;
 use App\Http\Controllers\Staff\GateController;
@@ -84,6 +85,9 @@ Route::prefix('panel')->name('staff.')->group(function () {
         Route::put('/password', [PasswordController::class, 'update'])->name('password.update');
 
         Route::get('/dashboard', DashboardController::class)->name('dashboard');
+
+        // کنسول یکجا: همان کارهای ایستگاه‌ها، بدون گشتن در منو
+        Route::get('/console', [ConsoleController::class, 'index'])->name('console');
 
         // نگهبانی / باسکول
         Route::get('/gate', [GateController::class, 'index'])->name('gate.index');

@@ -10,7 +10,17 @@ const user = computed(() => page.props.auth.user);
 const factory = computed(() => page.props.factory);
 const menuOpen = ref(false);
 
-const can = (permission: string) => user.value?.permissions.includes(permission) ?? false;
+/**
+ * «permission» می‌تواند یک رشته باشد یا چند تا.
+ *
+ * چند تا یعنی «هرکدام کافی است» — برای صفحه‌ای مثل کنسول که کنترلرش هم
+ * همین‌طور اجازه می‌دهد. یک دسترسیِ تنها آنجا یعنی کسی که کارِ محوطه را
+ * می‌تواند بکند، لینکش را نبیند.
+ */
+const can = (permission: string | string[]) =>
+    (Array.isArray(permission) ? permission : [permission]).some(
+        (name) => user.value?.permissions.includes(name) ?? false,
+    );
 
 /**
  * منوی اصلی — به ترتیبی که کار در کارخانه پیش می‌رود.
@@ -27,6 +37,13 @@ const can = (permission: string) => user.value?.permissions.includes(permission)
  */
 const PRIMARY = [
     { label: 'داشبورد', name: 'staff.dashboard', pattern: 'staff.dashboard', permission: 'dashboard.view' },
+    {
+        label: 'کنسول محوطه',
+        name: 'staff.console',
+        pattern: 'staff.console',
+        // همان چهار دسترسی‌ای که ConsoleController قبول می‌کند
+        permission: ['queue.checkin', 'weighing.record', 'queue.start-loading', 'queue.complete-loading'],
+    },
     { label: 'مدیریت صف', name: 'staff.queue.index', pattern: 'staff.queue.*', permission: 'queue.view' },
     { label: 'نگهبانی', name: 'staff.gate.index', pattern: 'staff.gate.*', permission: 'queue.checkin' },
     { label: 'باسکول', name: 'staff.weighbridge.index', pattern: 'staff.weighbridge.*', permission: 'weighing.record' },
@@ -46,7 +63,7 @@ const SETTINGS = [
 
 type NavItem = { label: string; href: string; active: boolean };
 
-function build(items: typeof PRIMARY): NavItem[] {
+function build(items: { label: string; name: string; pattern: string; permission: string | string[] }[]): NavItem[] {
     return items
         .filter((item) => can(item.permission) && route().has(item.name))
         .map((item) => ({
