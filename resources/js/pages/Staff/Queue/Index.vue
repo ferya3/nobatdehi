@@ -43,6 +43,25 @@ const flash = computed(() => page.props.flash);
 const canManageQueue = computed(() => page.props.auth.user?.permissions.includes('queue.manage') ?? false);
 
 // تغییر اولویت: جای نوبت را داخل همان ساعت جابه‌جا می‌کند، نه بین ساعت‌ها
+/** توضیحِ اخطار وزن، برای tooltip روی همان نشان */
+function weightDetail(row: QueueRow): string {
+    const w = row.weighing;
+
+    if (!w) return '';
+
+    const kg = (value: string | null) =>
+        value === null ? '—' : Number(value).toLocaleString('en-US');
+
+    const parts = [`خالص ${kg(w.net_kg)} کیلوگرم`];
+
+    if (w.expected_kg !== null) parts.push(`حواله ${kg(w.expected_kg)} کیلوگرم`);
+    if (w.variance_kg !== null) parts.push(`اختلاف ${kg(String(Math.abs(Number(w.variance_kg))))} کیلوگرم`);
+
+    parts.push('برگه خروج صادر نشده است.');
+
+    return parts.join(' · ');
+}
+
 const priorityFor = ref<QueueRow | null>(null);
 const priorityValue = ref(0);
 const priorityReason = ref('');
@@ -598,6 +617,18 @@ const freshHiddenCount = computed(() => {
                                     </p>
                                     <p v-if="row.cancelled_by_label" class="mt-1 text-xs font-medium text-rose-600">
                                         {{ row.cancelled_by_label }}
+                                    </p>
+                                    <!--
+                                        اخطارِ وزن. برگه‌ی خروج خودش قفل شده، ولی
+                                        قفل بی‌صدا است: تا کسی اینجا نبیند، کامیون
+                                        در محوطه می‌ماند و هیچ‌کس نمی‌داند چرا.
+                                    -->
+                                    <p
+                                        v-if="row.weighing?.discrepancy_label"
+                                        :title="weightDetail(row)"
+                                        class="mt-1 inline-flex items-center gap-1 rounded-full bg-rose-100 px-2 py-0.5 text-xs font-bold text-rose-800"
+                                    >
+                                        ⚠ {{ row.weighing.discrepancy_label }}
                                     </p>
                                     <p v-if="row.loading_point" class="mt-1 text-xs text-slate-400">
                                         {{ row.loading_point }}

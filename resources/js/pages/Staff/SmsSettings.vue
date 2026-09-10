@@ -47,6 +47,7 @@ const form = useForm({
     sms_custom_method: String(props.settings.sms_custom_method ?? 'GET'),
     sms_optout: String(props.settings.sms_optout ?? ''),
     sms_manager_recipients: String(props.settings.sms_manager_recipients ?? ''),
+    sms_weight_alert_recipients: String(props.settings.sms_weight_alert_recipients ?? ''),
 });
 
 const testMobile = ref('');
@@ -252,6 +253,21 @@ function useSuggestedDomain() {
                             dir="ltr"
                             class="num"
                             placeholder="09121112233,09121112244"
+                        />
+                    </FormField>
+
+                    <FormField
+                        label="شماره مدیرعامل — اخطار وزن"
+                        for="sms_weight_alert_recipients"
+                        :error="form.errors.sms_weight_alert_recipients"
+                        hint="اضافه‌بار و مغایرت تناژ به این شماره‌ها خبر داده می‌شود. خالی بگذارید تا به همان «شماره مدیران» برود."
+                    >
+                        <TextInput
+                            id="sms_weight_alert_recipients"
+                            v-model="form.sms_weight_alert_recipients"
+                            dir="ltr"
+                            class="num"
+                            placeholder="09121112255"
                         />
                     </FormField>
                 </div>

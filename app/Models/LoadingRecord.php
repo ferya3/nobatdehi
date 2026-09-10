@@ -23,6 +23,7 @@ class LoadingRecord extends Model
             'tare_weighed_at' => 'datetime',
             'gross_weighed_at' => 'datetime',
             'exit_permit_issued_at' => 'datetime',
+            'discrepancy_alerted_at' => 'datetime',
         ];
     }
 

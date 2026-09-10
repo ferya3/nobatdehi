@@ -32,6 +32,7 @@ class UpdateSmsSettingsRequest extends FormRequest
             'sms_custom_method' => ['required', Rule::in(['GET', 'POST'])],
             'sms_optout' => ['nullable', 'string', 'max:40'],
             'sms_manager_recipients' => ['nullable', 'string', 'max:400'],
+            'sms_weight_alert_recipients' => ['nullable', 'string', 'max:400'],
         ];
     }
 
@@ -39,14 +40,13 @@ class UpdateSmsSettingsRequest extends FormRequest
     {
         return [
             function (Validator $validator) {
-                foreach ($this->managerRecipients() as $mobile) {
-                    if (! Mobile::isValid($mobile)) {
-                        $validator->errors()->add(
-                            'sms_manager_recipients',
-                            "شماره «{$mobile}» معتبر نیست.",
-                        );
+                foreach (['sms_manager_recipients', 'sms_weight_alert_recipients'] as $field) {
+                    foreach ($this->numbersIn($field) as $mobile) {
+                        if (! Mobile::isValid($mobile)) {
+                            $validator->errors()->add($field, "شماره «{$mobile}» معتبر نیست.");
 
-                        return;
+                            return;
+                        }
                     }
                 }
 
@@ -74,20 +74,30 @@ class UpdateSmsSettingsRequest extends FormRequest
     /** @return array<int, string> */
     public function managerRecipients(): array
     {
+        return $this->numbersIn('sms_manager_recipients');
+    }
+
+    /** شماره‌های یک فیلدِ «با کاما جدا» */
+    private function numbersIn(string $field): array
+    {
         return array_values(array_filter(array_map(
             'trim',
-            explode(',', (string) $this->input('sms_manager_recipients')),
+            explode(',', (string) $this->input($field)),
         )));
+    }
+
+    /** همان شماره‌ها، آماده‌ی ذخیره */
+    private function normalized(string $field): string
+    {
+        return implode(',', array_map(
+            fn (string $mobile) => Mobile::normalize($mobile) ?? $mobile,
+            $this->numbersIn($field),
+        ));
     }
 
     /** @return array<string, string> مقادیر آماده برای ذخیره */
     public function settings(): array
     {
-        $normalized = array_map(
-            fn (string $mobile) => Mobile::normalize($mobile) ?? $mobile,
-            $this->managerRecipients(),
-        );
-
         return [
             'sms_enabled' => $this->boolean('sms_enabled') ? '1' : '0',
             'sms_provider' => $this->string('sms_provider')->toString(),
@@ -100,7 +110,8 @@ class UpdateSmsSettingsRequest extends FormRequest
             'sms_custom_url' => trim((string) $this->input('sms_custom_url')),
             'sms_custom_method' => $this->string('sms_custom_method')->toString(),
             'sms_optout' => trim((string) $this->input('sms_optout')),
-            'sms_manager_recipients' => implode(',', $normalized),
+            'sms_manager_recipients' => $this->normalized('sms_manager_recipients'),
+            'sms_weight_alert_recipients' => $this->normalized('sms_weight_alert_recipients'),
         ];
     }
 }

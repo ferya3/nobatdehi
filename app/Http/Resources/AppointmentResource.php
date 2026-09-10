@@ -76,6 +76,24 @@ class AppointmentResource extends JsonResource
                 ),
             ]),
 
+            // «وزن چه شد» — برای پنل صف، که تنها جایی است که همه‌ی کامیون‌ها
+            // کنار هم دیده می‌شوند. بدون این، مغایرتِ وزن فقط روی صفحه‌ی
+            // باسکول دیده می‌شد و اپراتورِ صف از آن بی‌خبر می‌ماند.
+            'weighing' => $this->whenLoaded('loadingRecord', fn () => $this->loadingRecord === null ? null : [
+                'net_kg' => $this->loadingRecord->net_weight_kg,
+                'expected_kg' => $this->loadingRecord->expected_net_kg,
+                'variance_kg' => $this->loadingRecord->variance_kg,
+                'is_overload' => (bool) $this->loadingRecord->is_overload,
+                'discrepancy' => $this->loadingRecord->discrepancy_kind,
+                'discrepancy_label' => match ($this->loadingRecord->discrepancy_kind) {
+                    'overload' => 'اضافه‌بار',
+                    'variance' => 'مغایرت وزن',
+                    default => null,
+                },
+                'alerted_at' => $this->loadingRecord->discrepancy_alerted_at?->toIso8601String(),
+                'exit_permit_number' => $this->loadingRecord->exit_permit_number,
+            ]),
+
             'cancel_reason' => $this->cancel_reason,
             'cancelled_by' => $this->cancelled_by_type,
             'cancelled_by_label' => $this->cancelledByLabel(),

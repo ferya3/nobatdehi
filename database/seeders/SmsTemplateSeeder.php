@@ -43,6 +43,11 @@ class SmsTemplateSeeder extends Seeder
                 'body' => "لغو نوبت بارگیری\nشماره نوبت: {number}\nپلاک: {plate}\nراننده: {driver}\nنوع بار: {product}\nتاریخ: {date}\nساعت: {time}\n{by}\nدلیل: {reason}",
             ],
             [
+                'key' => 'weight.discrepancy.manager',
+                'title' => 'مغایرت وزن — اطلاع به مدیر',
+                'body' => "هشدار {kind}\nشماره نوبت: {number}\nپلاک: {plate}\nراننده: {driver}\nنوع بار: {product}\nوزن خالص: {net} کیلوگرم\nتناژ حواله: {expected} کیلوگرم\nاختلاف: {variance} کیلوگرم\nبرگه خروج صادر نشد.",
+            ],
+            [
                 'key' => 'otp.login',
                 'title' => 'کد ورود',
                 'body' => "کد ورود شما: {code}\nاین کد تا {minutes} دقیقه معتبر است.",

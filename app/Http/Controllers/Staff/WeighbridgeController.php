@@ -13,8 +13,10 @@ use App\Domain\Gate\GateDevices;
 use App\Domain\Truck\PlateNumber;
 use App\Domain\Weighbridge\ExitPermit;
 use App\Domain\Weighbridge\ScaleDevices;
+use App\Domain\Weighbridge\WeighingResult;
 use App\Domain\Weighbridge\WeighingService;
 use App\Domain\Weighbridge\WeightSource;
+use App\Events\WeightDiscrepancyDetected;
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\Staff\Concerns\WorksOnOneWaybill;
 use App\Http\Requests\Staff\RecordWeightRequest;
@@ -299,6 +301,7 @@ class WeighbridgeController extends Controller
             'expected_net_kg' => $result->expectedKg,
             'variance_kg' => $result->varianceKg,
             'is_overload' => $result->isOverload,
+            'discrepancy_kind' => $this->discrepancyKind($result),
         ])->save();
 
         $source->reading?->forceFill(['appointment_id' => $appointment->id])->save();
@@ -332,12 +335,52 @@ class WeighbridgeController extends Controller
                 $request,
             );
 
+            $this->alertOnDiscrepancy($appointment, $record, $result);
+
             return $this->toStation($appointment)->with('error', $result->blockReason);
         }
 
         $number = ExitPermit::issue($appointment, $record);
 
         return $this->toStation($appointment)->with('success', "وزن پر ثبت و برگه خروج {$number} صادر شد.");
+    }
+
+    private function discrepancyKind(WeighingResult $result): ?string
+    {
+        if (! $result->hasDiscrepancy()) {
+            return null;
+        }
+
+        return $result->isOverload
+            ? WeightDiscrepancyDetected::KIND_OVERLOAD
+            : WeightDiscrepancyDetected::KIND_VARIANCE;
+    }
+
+    /**
+     * یک بار خبر می‌دهیم، نه هر بار.
+     *
+     * اپراتور ممکن است کامیون را دوباره و دوباره وزن کند تا تکلیفش روشن
+     * شود؛ اگر هر توزین یک پیامک بفرستد، چند روز بعد کسی دیگر این
+     * پیامک‌ها را باز نمی‌کند و اخطارِ واقعی هم گم می‌شود.
+     */
+    private function alertOnDiscrepancy(Appointment $appointment, LoadingRecord $record, WeighingResult $result): void
+    {
+        $kind = $this->discrepancyKind($result);
+
+        if ($kind === null || $record->discrepancy_alerted_at !== null) {
+            return;
+        }
+
+        $record->forceFill(['discrepancy_alerted_at' => now()])->save();
+
+        WeightDiscrepancyDetected::dispatch(
+            $appointment->id,
+            $kind,
+            $result->netKg,
+            $result->expectedKg,
+            $result->varianceKg,
+            (string) $result->blockReason,
+        );
     }
 
     /**

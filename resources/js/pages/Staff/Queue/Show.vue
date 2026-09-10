@@ -20,6 +20,9 @@ defineProps<{
         clock: string | null;
     }[];
 }>();
+
+const kg = (value: string | null | undefined) =>
+    value === null || value === undefined ? '—' : Number(value).toLocaleString('en-US');
 </script>
 
 <template>
@@ -170,6 +173,65 @@ defineProps<{
                             </p>
                         </div>
                     </div>
+                </section>
+
+                <!-- توزین: عددها و اینکه برگه‌ی خروج چه شد -->
+                <section
+                    v-if="appointment.weighing"
+                    class="card space-y-4 p-5 lg:col-span-2"
+                    :class="appointment.weighing.discrepancy ? 'border-rose-300' : ''"
+                >
+                    <div class="flex items-center justify-between gap-3">
+                        <h2 class="text-sm font-semibold text-slate-700">توزین</h2>
+                        <span
+                            v-if="appointment.weighing.discrepancy_label"
+                            class="rounded-full bg-rose-100 px-2.5 py-1 text-xs font-bold text-rose-800"
+                        >
+                            ⚠ {{ appointment.weighing.discrepancy_label }}
+                        </span>
+                    </div>
+
+                    <dl class="grid gap-4 sm:grid-cols-3">
+                        <div>
+                            <dt class="text-xs text-slate-500">وزن خالص</dt>
+                            <dd class="num mt-0.5 text-sm font-medium text-slate-800" dir="ltr">
+                                {{ kg(appointment.weighing.net_kg) }}
+                            </dd>
+                        </div>
+                        <div>
+                            <dt class="text-xs text-slate-500">تناژ حواله</dt>
+                            <dd class="num mt-0.5 text-sm font-medium text-slate-800" dir="ltr">
+                                {{ kg(appointment.weighing.expected_kg) }}
+                            </dd>
+                        </div>
+                        <div>
+                            <dt class="text-xs text-slate-500">اختلاف</dt>
+                            <dd
+                                class="num mt-0.5 text-sm font-medium"
+                                :class="appointment.weighing.discrepancy ? 'text-rose-700' : 'text-slate-800'"
+                                dir="ltr"
+                            >
+                                {{ kg(appointment.weighing.variance_kg) }}
+                            </dd>
+                        </div>
+                    </dl>
+
+                    <p
+                        v-if="appointment.weighing.exit_permit_number"
+                        class="rounded-xl bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-900"
+                    >
+                        برگه خروج <span class="num">{{ appointment.weighing.exit_permit_number }}</span> صادر شد.
+                    </p>
+
+                    <p
+                        v-else-if="appointment.weighing.discrepancy"
+                        class="rounded-xl bg-rose-50 px-4 py-3 text-sm font-medium text-rose-900"
+                    >
+                        برگه خروج تا تعیین تکلیف صادر نمی‌شود.
+                        <span v-if="appointment.weighing.alerted_at" class="block text-xs font-normal">
+                            اخطار برای مدیر ارسال شد.
+                        </span>
+                    </p>
                 </section>
 
                 <section class="card p-5">

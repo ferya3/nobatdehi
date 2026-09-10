@@ -50,6 +50,9 @@ class Setting extends Model
         // شماره‌هایی که پیام «نوبت جدید» را می‌گیرند — با کاما جدا
         'sms_manager_recipients' => '',
 
+        // اخطارِ مغایرت وزن. خالی که باشد به همان فهرست بالا می‌رود.
+        'sms_weight_alert_recipients' => '',
+
         // دستگاه‌های گیت: بارکدخوان، دوربین ایستگاه، دوربین پلاک‌خوان شبکه‌ای
         'gate_barcode_enabled' => '1',
         'gate_station_camera_enabled' => '1',

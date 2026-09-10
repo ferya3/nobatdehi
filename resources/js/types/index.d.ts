@@ -119,6 +119,16 @@ export interface Appointment {
         starts_at: string;
         ends_at: string;
     } | null;
+    weighing?: {
+        net_kg: string | null;
+        expected_kg: string | null;
+        variance_kg: string | null;
+        is_overload: boolean;
+        discrepancy: 'overload' | 'variance' | null;
+        discrepancy_label: string | null;
+        alerted_at: string | null;
+        exit_permit_number: string | null;
+    } | null;
     gate?: {
         entry_method: string | null;
         entry_method_label: string | null;

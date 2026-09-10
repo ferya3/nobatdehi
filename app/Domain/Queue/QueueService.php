@@ -278,7 +278,7 @@ final class QueueService
     {
         $date ??= CarbonImmutable::today();
 
-        return Appointment::with(['driver', 'truck.truckType', 'product', 'loadingPoint'])
+        return Appointment::with(['driver', 'truck.truckType', 'product', 'loadingPoint', 'loadingRecord'])
             ->where('factory_id', $factory->id)
             ->whereDate('date', $date->toDateString())
             ->queueOrder()
