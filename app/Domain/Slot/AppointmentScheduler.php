@@ -68,9 +68,19 @@ final class AppointmentScheduler
         return null;
     }
 
-    /** اولین جای خالی در یک روز مشخص، یا null اگر آن روز جا نشود */
-    public function openingOn(Factory $factory, CarbonImmutable $date, int $loadingMinutes): ?Opening
-    {
+    /**
+     * اولین جای خالی در یک روز مشخص، یا null اگر آن روز جا نشود.
+     *
+     * $notBefore کفِ راننده است، نه کفِ کارخانه: وقتی کسی «فردا حوالی ۱۰»
+     * می‌خواهد، سامانه اولین جای خالیِ ساعت ۱۰ به بعد را می‌دهد — نه ساعت
+     * هفت صبح که آن روز اولین جای خالی است.
+     */
+    public function openingOn(
+        Factory $factory,
+        CarbonImmutable $date,
+        int $loadingMinutes,
+        ?CarbonImmutable $notBefore = null,
+    ): ?Opening {
         $plan = $this->plans->planFor($factory, $date);
 
         if ($plan === null) {
@@ -91,6 +101,10 @@ final class AppointmentScheduler
             $opensAt->max(CarbonImmutable::now()->addMinutes((int) $factory->booking_lead_minutes)),
         );
 
+        if ($notBefore !== null) {
+            $earliest = $this->roundUp($earliest->max($notBefore));
+        }
+
         // مهلت که از ساعت تعطیلیِ این روز رد شده باشد، این روز اصلاً گزینه نیست
         if ($earliest->greaterThanOrEqualTo($closesAt)) {
             return null;
@@ -106,6 +120,50 @@ final class AppointmentScheduler
         }
 
         return new Opening($date, $startsAt, $endsAt, $line, $loadingMinutes);
+    }
+
+    /**
+     * ساعت‌های یک روز، با این خبر که این کامیون در هرکدام جا می‌شود یا نه.
+     *
+     * راننده‌ای که روز خاصی می‌خواهد، نباید ساعتی را تایپ کند و بعد بشنود
+     * «جا نیست». پنجره‌ها از همان طولی ساخته می‌شوند که کارخانه برای
+     * اسلات‌هایش تعریف کرده، و هرکدام می‌گوید اگر از اینجا شروع کنی، نوبت
+     * واقعاً کِی می‌افتد.
+     *
+     * عددها تا لحظه‌ی ثبت تخمینی‌اند: بین دیدن و زدن دکمه ممکن است کسی
+     * دیگر نوبت گرفته باشد. زمان‌بند داخل قفلِ روز دوباره حساب می‌کند.
+     *
+     * @return array<int, array{time: string, available: bool, starts_at: ?string, ends_at: ?string}>
+     */
+    public function windowsOn(Factory $factory, CarbonImmutable $date, int $loadingMinutes): array
+    {
+        $plan = $this->plans->planFor($factory, $date);
+
+        if ($plan === null) {
+            return [];
+        }
+
+        [$opensAt, $closesAt] = $plan;
+
+        $step = max(15, (int) $factory->slot_minutes);
+        $windows = [];
+
+        for ($cursor = $opensAt; $cursor->lessThan($closesAt); $cursor = $cursor->addMinutes($step)) {
+            $opening = $this->openingOn($factory, $date, $loadingMinutes, $cursor);
+
+            // نوبتی که خیلی دیرتر از پنجره‌ی خواسته‌شده بیفتد، جوابِ این
+            // پنجره نیست — جوابِ پنجره‌ای جلوتر است و همان‌جا نشان داده می‌شود.
+            $fits = $opening !== null && $opening->startsAt->lessThan($cursor->addMinutes($step));
+
+            $windows[] = [
+                'time' => $cursor->format('H:i'),
+                'available' => $fits,
+                'starts_at' => $fits ? $opening->startsAt->format('H:i') : null,
+                'ends_at' => $fits ? $opening->endsAt->format('H:i') : null,
+            ];
+        }
+
+        return $windows;
     }
 
     /**

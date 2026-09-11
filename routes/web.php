@@ -54,6 +54,9 @@ Route::prefix('queue')->name('driver.')->group(function () {
             ->middleware('throttle:booking')
             ->name('booking.store');
 
+        // ساعت‌های آزادِ یک روز — برای وقتی راننده روز خاصی می‌خواهد
+        Route::get('/book/openings', [BookingController::class, 'openings'])->name('booking.openings');
+
         Route::get('/appointments/{appointment}', [AppointmentController::class, 'show'])
             ->name('appointments.show');
         Route::post('/appointments/{appointment}/cancel', [AppointmentController::class, 'cancel'])

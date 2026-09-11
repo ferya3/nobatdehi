@@ -33,6 +33,29 @@ class BookingException extends RuntimeException
         );
     }
 
+    /**
+     * روز و ساعتی که راننده خواسته، جا ندارد.
+     *
+     * جدا از noOpening است چون جوابِ راننده فرق می‌کند: آنجا باید صبر کند،
+     * اینجا باید ساعت یا روز دیگری بزند.
+     */
+    public static function requestedTimeIsFull(string $day): self
+    {
+        return new self(
+            'requested_full',
+            "برای {$day} از ساعت خواسته‌شده به بعد جای خالی نیست. ساعت یا روز دیگری انتخاب کنید.",
+        );
+    }
+
+    /** امروز مالِ صف است و صف را سامانه می‌چیند */
+    public static function requestedDayTooSoon(): self
+    {
+        return new self(
+            'day_too_soon',
+            'انتخاب روز از فردا به بعد ممکن است. برای امروز، سامانه خودش نوبت اعلام می‌کند.',
+        );
+    }
+
     public static function dailyCapacityReached(): self
     {
         return new self('daily_capacity', 'ظرفیت نوبت‌دهی این روز تکمیل شده است.');

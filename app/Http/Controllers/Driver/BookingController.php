@@ -7,7 +7,9 @@ namespace App\Http\Controllers\Driver;
 use App\Domain\Appointment\Actions\CreateAppointment;
 use App\Domain\Appointment\Data\NewAppointment;
 use App\Domain\Appointment\Exceptions\BookingException;
+use App\Domain\Slot\AppointmentScheduler;
 use App\Domain\Slot\OpeningPreview;
+use App\Domain\Slot\SlotGenerator;
 use App\Domain\Truck\PlateNumber;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Driver\StoreAppointmentRequest;
@@ -16,8 +18,12 @@ use App\Models\Factory;
 use App\Models\Product;
 use App\Models\Truck;
 use App\Models\TruckType;
+use App\Support\Jalali;
+use Carbon\CarbonImmutable;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -25,14 +31,20 @@ use Inertia\Response;
 /**
  * نوبت‌گیری راننده.
  *
- * راننده روز و ساعت انتخاب نمی‌کند. سه چیز می‌دهد — خودرو، بار، هویت — و
+ * پیش‌فرض همان است که بود: راننده سه چیز می‌دهد — خودرو، بار، هویت — و
  * سامانه در جواب می‌گوید نوبتش کِی است. کارخانه مطب دکتر نیست؛ صف است.
+ *
+ * ولی صف مالِ امروز است. راننده‌ای که این هفته روز دیگری کار دارد، می‌تواند
+ * روزی از فردا به بعد و ساعتی حوالیِ آن انتخاب کند. ساعت باز هم انتخابِ او
+ * نیست: یک کف است و زمان‌بند اولین جای خالی از آنجا به بعد را می‌دهد.
  */
 class BookingController extends Controller
 {
     public function __construct(
         private readonly OpeningPreview $preview,
         private readonly CreateAppointment $createAppointment,
+        private readonly AppointmentScheduler $scheduler,
+        private readonly SlotGenerator $slots,
     ) {}
 
     public function create(Request $request): Response|RedirectResponse
@@ -78,6 +90,83 @@ class BookingController extends Controller
                 ->orderBy('sort_order')
                 ->get(['id', 'name', 'description']),
             'plateLetters' => PlateNumber::LETTERS,
+
+            // روزهایی که راننده می‌تواند انتخاب کند — از فردا تا انتهای افق.
+            // امروز عمداً نیست: صفِ امروز را سامانه می‌چیند.
+            'bookableDays' => $this->bookableDays($factory),
+        ]);
+    }
+
+    /**
+     * روزهای قابل انتخاب، با برچسب شمسی.
+     *
+     * تعطیل‌ها بیرون‌اند: روزی که کارخانه باز نیست، انتخابش فقط یک بن‌بست
+     * تازه می‌سازد.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function bookableDays(?Factory $factory): array
+    {
+        if ($factory === null) {
+            return [];
+        }
+
+        $days = [];
+        $today = CarbonImmutable::today();
+
+        for ($offset = 1; $offset <= (int) $factory->booking_horizon_days; $offset++) {
+            $date = $today->addDays($offset);
+
+            if ($this->slots->planFor($factory, $date) === null) {
+                continue;
+            }
+
+            $days[] = [
+                'date' => $date->toDateString(),
+                'jalali' => Jalali::date($date),
+                'day_label' => Jalali::dayLabel($date),
+                // روی چیپِ باریکِ گوشی، «شنبه» و «۲۱ شهریور» دو خط می‌شوند
+                'weekday' => Jalali::weekday($date),
+                'day_month' => Jalali::dayMonth($date),
+            ];
+        }
+
+        return $days;
+    }
+
+    /**
+     * ساعت‌های آزادِ یک روز برای یک نوع خودرو.
+     *
+     * راننده‌ای که روز خاصی می‌خواهد نباید ساعتی تایپ کند و بعد بشنود «جا
+     * نیست». اینجا همان چیزی گفته می‌شود که زمان‌بند موقع ثبت هم خواهد گفت.
+     */
+    public function openings(Request $request): JsonResponse
+    {
+        $factory = $this->factory();
+
+        $validated = $request->validate([
+            'date' => ['required', 'date_format:Y-m-d', 'after:today'],
+            'truck_type_id' => ['required', Rule::exists('truck_types', 'id')->where('is_active', true)],
+        ]);
+
+        if ($factory === null) {
+            return response()->json(['windows' => []]);
+        }
+
+        $date = CarbonImmutable::parse($validated['date'])->startOfDay();
+
+        if ($date->greaterThan(CarbonImmutable::today()->addDays((int) $factory->booking_horizon_days))) {
+            return response()->json(['windows' => []]);
+        }
+
+        $type = TruckType::findOrFail($validated['truck_type_id']);
+
+        return response()->json([
+            'windows' => $this->scheduler->windowsOn(
+                $factory,
+                $date,
+                $type->loading_minutes ?? (int) $factory->avg_loading_minutes,
+            ),
         ]);
     }
 
@@ -117,13 +206,18 @@ class BookingController extends Controller
                 idempotencyKey: $request->string('idempotency_key')->toString(),
                 ip: $request->ip(),
                 userAgent: $request->userAgent(),
+                preferredStart: $request->preferredStart(),
             ));
         } catch (BookingException $e) {
-            // «جا نیست» به نوع خودرو می‌چسبد، چون تنها چیزی که راننده می‌تواند
-            // عوضش کند تا جا باز شود، همان است.
-            throw ValidationException::withMessages([
-                $e->reason === 'no_opening' ? 'truck_type_id' : 'plate_two' => $e->getMessage(),
-            ]);
+            // خطا به همان فیلدی می‌چسبد که راننده می‌تواند عوضش کند تا جا باز
+            // شود: «آن ساعت پر است» به ساعت، «جا نیست» به نوع خودرو.
+            $field = match ($e->reason) {
+                'requested_full', 'day_too_soon' => 'preferred_time',
+                'no_opening' => 'truck_type_id',
+                default => 'plate_two',
+            };
+
+            throw ValidationException::withMessages([$field => $e->getMessage()]);
         }
 
         return redirect()

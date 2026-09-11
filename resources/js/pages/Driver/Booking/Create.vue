@@ -20,7 +20,21 @@ const props = defineProps<{
     truckTypes: TruckTypeOption[];
     products: { id: number; name: string; description: string | null }[];
     plateLetters: string[];
+    bookableDays: {
+        date: string;
+        jalali: string;
+        day_label: string;
+        weekday: string;
+        day_month: string;
+    }[];
 }>();
+
+interface Window {
+    time: string;
+    available: boolean;
+    starts_at: string | null;
+    ends_at: string | null;
+}
 
 // مرحله‌ی «تاریخ و ساعت» حذف شد: راننده ساعت انتخاب نمی‌کند، می‌بیند.
 const STEPS = ['کامیون', 'نوع بار', 'تأیید'];
@@ -35,9 +49,72 @@ const form = useForm({
     plate_iran: props.lastTruck?.plate.iran ?? '',
     truck_type_id: props.lastTruck?.truck_type_id ?? (null as number | null),
     product_id: null as number | null,
+    // خالی یعنی «زودترین ممکن» — همان رفتار همیشگی
+    preferred_date: '',
+    preferred_time: '',
     // هر بار که فرم باز می‌شود یک کلید تازه: کلیک دوم و سوم نوبت جدید نمی‌سازد
     idempotency_key: uuid(),
 });
+
+/**
+ * دو راه، نه دو صفحه.
+ *
+ * پیش‌فرض همان است که بود: سامانه زودترین نوبت را اعلام می‌کند. راننده‌ای که
+ * این هفته روز دیگری کار دارد، همین‌جا روز و ساعتِ حوالیِ آن را انتخاب می‌کند.
+ */
+const pickDay = ref(false);
+
+const windows = ref<Window[]>([]);
+const loadingWindows = ref(false);
+
+/** ساعت‌های آزادِ روزِ انتخاب‌شده — همان چیزی که زمان‌بند موقع ثبت هم می‌گوید */
+async function loadWindows() {
+    if (!form.preferred_date || form.truck_type_id === null) {
+        windows.value = [];
+
+        return;
+    }
+
+    loadingWindows.value = true;
+
+    try {
+        const url = route('driver.booking.openings', {
+            date: form.preferred_date,
+            truck_type_id: form.truck_type_id,
+        });
+
+        const response = await fetch(url, {
+            headers: { Accept: 'application/json' },
+            credentials: 'same-origin',
+        });
+
+        windows.value = response.ok ? ((await response.json()).windows as Window[]) : [];
+    } catch {
+        // شبکه‌ی گوشیِ راننده قطع و وصل می‌شود؛ دفعه‌ی بعد دوباره
+        windows.value = [];
+    } finally {
+        loadingWindows.value = false;
+    }
+}
+
+watch(() => [form.preferred_date, form.truck_type_id], loadWindows);
+
+// برگشت به «زودترین ممکن» باید انتخابِ قبلی را هم پاک کند، وگرنه راننده
+// فکر می‌کند زودترین نوبت را گرفته و روزِ فراموش‌شده ثبت می‌شود
+watch(pickDay, (on) => {
+    if (on) return;
+
+    form.preferred_date = '';
+    form.preferred_time = '';
+    windows.value = [];
+});
+
+const chosen = computed(() =>
+    windows.value.find((w) => w.time === form.preferred_time && w.available) ?? null,
+);
+
+/** دکمه‌ی ثبت کِی باز است — هر حالت، شرط خودش */
+const canSubmit = computed(() => (pickDay.value ? chosen.value !== null : opening.value !== null));
 
 const selectedProduct = computed(() => props.products.find((p) => p.id === form.product_id) ?? null);
 const selectedTruckType = computed(() => props.truckTypes.find((t) => t.id === form.truck_type_id) ?? null);
@@ -83,6 +160,10 @@ watch(
         )
             step.value = 0;
         else if (keys.includes('product_id')) step.value = 1;
+        else if (keys.some((k) => k.startsWith('preferred'))) {
+            step.value = STEPS.length - 1;
+            pickDay.value = true;
+        }
     },
 );
 
@@ -208,28 +289,141 @@ function submit() {
 
             <!-- مرحله ۳: تأیید -->
             <section v-show="step === 2" class="space-y-4">
-                <!-- نوبتی که سامانه اعلام می‌کند -->
-                <div v-if="opening" class="card overflow-hidden">
-                    <div class="bg-brand-50 px-5 py-4 text-center">
-                        <p class="text-xs text-brand-800">زمان نوبت شما</p>
-                        <p class="num mt-1 text-3xl font-bold text-brand-900" dir="ltr">
-                            {{ opening.starts_at }}
-                        </p>
-                        <p class="mt-1 text-sm font-medium text-brand-800">
-                            {{ opening.is_today ? 'امروز' : opening.day_label }} — {{ opening.jalali }}
+                <!-- زودترین نوبت، همان‌طور که سامانه اعلام می‌کند -->
+                <template v-if="!pickDay">
+                    <div v-if="opening" class="card overflow-hidden">
+                        <div class="bg-brand-50 px-5 py-4 text-center">
+                            <p class="text-xs text-brand-800">زمان نوبت شما</p>
+                            <p class="num mt-1 text-3xl font-bold text-brand-900" dir="ltr">
+                                {{ opening.starts_at }}
+                            </p>
+                            <p class="mt-1 text-sm font-medium text-brand-800">
+                                {{ opening.is_today ? 'امروز' : opening.day_label }} — {{ opening.jalali }}
+                            </p>
+                        </div>
+
+                        <p class="border-t border-brand-100 px-5 py-3 text-center text-xs text-slate-500">
+                            تخمین پایان بارگیری:
+                            <span class="num font-medium text-slate-700">{{ opening.ends_at }}</span>
+                            · مدت {{ duration(opening.loading_minutes) }}
                         </p>
                     </div>
 
-                    <p class="border-t border-brand-100 px-5 py-3 text-center text-xs text-slate-500">
-                        تخمین پایان بارگیری: <span class="num font-medium text-slate-700">{{ opening.ends_at }}</span>
-                        · مدت {{ duration(opening.loading_minutes) }}
-                    </p>
-                </div>
+                    <AlertBox v-else tone="warning">
+                        برای این نوع خودرو تا انتهای افق نوبت‌دهی جای خالی نیست.
+                        نوع خودروی دیگری انتخاب کنید یا بعداً دوباره تلاش کنید.
+                    </AlertBox>
 
-                <AlertBox v-else tone="warning">
-                    برای این نوع خودرو تا انتهای افق نوبت‌دهی جای خالی نیست.
-                    نوع خودروی دیگری انتخاب کنید یا بعداً دوباره تلاش کنید.
-                </AlertBox>
+                    <button
+                        v-if="bookableDays.length"
+                        type="button"
+                        class="w-full rounded-xl border border-dashed border-slate-300 px-4 py-3 text-sm text-slate-600 transition hover:border-brand-300 hover:bg-brand-50/50 hover:text-brand-800"
+                        @click="pickDay = true"
+                    >
+                        این ساعت مناسب نیست؟ روز دیگری انتخاب کنید
+                    </button>
+                </template>
+
+                <!-- یا روزی که خودش می‌خواهد -->
+                <template v-else>
+                    <div class="card space-y-4 p-5">
+                        <div class="flex items-start justify-between gap-3">
+                            <div>
+                                <h2 class="text-sm font-semibold text-slate-800">انتخاب روز و ساعت</h2>
+                                <p class="mt-0.5 text-xs text-slate-500">
+                                    از فردا به بعد. برای امروز، سامانه خودش نوبت اعلام می‌کند.
+                                </p>
+                            </div>
+
+                            <button
+                                type="button"
+                                class="shrink-0 text-xs text-slate-500 underline underline-offset-4 transition hover:text-slate-700"
+                                @click="pickDay = false"
+                            >
+                                زودترین نوبت
+                            </button>
+                        </div>
+
+                        <div class="flex gap-2 overflow-x-auto pb-1">
+                            <button
+                                v-for="day in bookableDays"
+                                :key="day.date"
+                                type="button"
+                                :class="[
+                                    'shrink-0 rounded-xl border px-3 py-2 text-center transition',
+                                    form.preferred_date === day.date
+                                        ? 'border-brand-500 bg-brand-50 text-brand-800'
+                                        : 'border-slate-300 text-slate-600 hover:bg-slate-50',
+                                ]"
+                                @click="form.preferred_date = day.date; form.preferred_time = ''"
+                            >
+                                <span class="block text-xs">{{ day.weekday }}</span>
+                                <span class="block text-sm font-semibold">{{ day.day_month }}</span>
+                            </button>
+                        </div>
+
+                        <p v-if="form.errors.preferred_date" class="text-sm text-rose-600">
+                            {{ form.errors.preferred_date }}
+                        </p>
+
+                        <template v-if="form.preferred_date">
+                            <p v-if="loadingWindows" class="text-sm text-slate-500">در حال گرفتن ساعت‌های آزاد…</p>
+
+                            <template v-else-if="windows.length">
+                                <div class="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                                    <button
+                                        v-for="window in windows"
+                                        :key="window.time"
+                                        type="button"
+                                        :disabled="!window.available"
+                                        :class="[
+                                            'num rounded-lg border py-2 text-sm transition',
+                                            !window.available
+                                                ? 'cursor-not-allowed border-slate-200 text-slate-300 line-through'
+                                                : form.preferred_time === window.time
+                                                  ? 'border-brand-500 bg-brand-600 font-semibold text-white'
+                                                  : 'border-slate-300 text-slate-700 hover:bg-slate-50',
+                                        ]"
+                                        @click="form.preferred_time = window.time"
+                                    >
+                                        {{ window.time }}
+                                    </button>
+                                </div>
+
+                                <p class="text-xs text-slate-500">
+                                    ساعت‌های خط‌خورده پر شده‌اند. نوبت شما از ساعتِ انتخابی به بعد،
+                                    روی اولین جای خالی می‌نشیند.
+                                </p>
+                            </template>
+
+                            <AlertBox v-else tone="warning">
+                                این روز برای خودروی شما جای خالی ندارد. روز دیگری انتخاب کنید.
+                            </AlertBox>
+                        </template>
+
+                        <p v-if="form.errors.preferred_time" class="text-sm text-rose-600">
+                            {{ form.errors.preferred_time }}
+                        </p>
+                    </div>
+
+                    <div v-if="chosen" class="card overflow-hidden">
+                        <div class="bg-brand-50 px-5 py-4 text-center">
+                            <p class="text-xs text-brand-800">زمان نوبت شما</p>
+                            <p class="num mt-1 text-3xl font-bold text-brand-900" dir="ltr">
+                                {{ chosen.starts_at }}
+                            </p>
+                            <p class="mt-1 text-sm font-medium text-brand-800">
+                                {{ bookableDays.find((d) => d.date === form.preferred_date)?.day_label }}
+                                — {{ bookableDays.find((d) => d.date === form.preferred_date)?.jalali }}
+                            </p>
+                        </div>
+
+                        <p class="border-t border-brand-100 px-5 py-3 text-center text-xs text-slate-500">
+                            تخمین پایان بارگیری:
+                            <span class="num font-medium text-slate-700">{{ chosen.ends_at }}</span>
+                        </p>
+                    </div>
+                </template>
 
                 <section class="card divide-y divide-slate-100 p-5">
                     <dl class="space-y-3 pb-4">
@@ -251,6 +445,15 @@ function submit() {
                             <dt class="text-sm text-slate-500">نوع بار</dt>
                             <dd class="text-sm font-medium text-slate-800">{{ selectedProduct?.name ?? '—' }}</dd>
                         </div>
+                        <div v-if="pickDay && form.preferred_date" class="flex justify-between gap-3">
+                            <dt class="text-sm text-slate-500">روز درخواستی</dt>
+                            <dd class="text-sm font-medium text-slate-800">
+                                {{ bookableDays.find((d) => d.date === form.preferred_date)?.jalali ?? '—' }}
+                                <span v-if="form.preferred_time" class="num">
+                                    — از {{ form.preferred_time }}
+                                </span>
+                            </dd>
+                        </div>
                     </dl>
 
                     <p class="pt-4 text-xs text-slate-500">
@@ -270,7 +473,7 @@ function submit() {
                     ادامه
                 </AppButton>
 
-                <AppButton v-else size="lg" :loading="form.processing" :disabled="!opening" @click="submit">
+                <AppButton v-else size="lg" :loading="form.processing" :disabled="!canSubmit" @click="submit">
                     ثبت نهایی نوبت
                 </AppButton>
             </div>

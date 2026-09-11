@@ -8,8 +8,10 @@ use App\Domain\Appointment\Data\NewAppointment;
 use App\Domain\Appointment\Enums\AppointmentStatus;
 use App\Domain\Appointment\Exceptions\BookingException;
 use App\Domain\Slot\AppointmentScheduler;
+use App\Domain\Slot\Opening;
 use App\Events\AppointmentCreated;
 use App\Models\Appointment;
+use App\Support\Jalali;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 
@@ -54,11 +56,7 @@ final class CreateAppointment
             $this->assertProductAvailable($data);
             $this->assertLimits($data);
 
-            $opening = $this->scheduler->nextOpening($data->factory, $this->loadingMinutes($data));
-
-            if ($opening === null) {
-                throw BookingException::noOpening((int) $data->factory->booking_horizon_days);
-            }
+            $opening = $this->findOpening($data);
 
             $appointment = Appointment::create([
                 'factory_id' => $data->factory->id,
@@ -194,6 +192,63 @@ final class CreateAppointment
     }
 
     /** شماره‌ی نوبت: دنباله‌ی روزانه‌ی هر کارخانه، امن زیر قفل روز */
+    /**
+     * جای نوبت: یا زودترین ممکن، یا روزی که راننده خواسته.
+     *
+     * قفلِ امروز پیش از این گرفته شده و همه‌ی نوبت‌گیری‌های کارخانه را
+     * سریالی می‌کند — چه آنکه دنبال زودترین جاست و چه آنکه روز مشخصی
+     * می‌خواهد. پس زمان‌بند همیشه صفِ کامل و تازه را می‌بیند.
+     */
+    private function findOpening(NewAppointment $data): Opening
+    {
+        $minutes = $this->loadingMinutes($data);
+
+        if ($data->preferredStart === null) {
+            $opening = $this->scheduler->nextOpening($data->factory, $minutes);
+
+            if ($opening === null) {
+                throw BookingException::noOpening((int) $data->factory->booking_horizon_days);
+            }
+
+            return $opening;
+        }
+
+        $this->assertRequestedDayIsAllowed($data);
+
+        $opening = $this->scheduler->openingOn(
+            $data->factory,
+            $data->preferredStart->startOfDay(),
+            $minutes,
+            $data->preferredStart,
+        );
+
+        if ($opening === null) {
+            throw BookingException::requestedTimeIsFull(Jalali::long($data->preferredStart));
+        }
+
+        return $opening;
+    }
+
+    /**
+     * روزِ خواسته‌شده باید از فردا باشد و داخل افق نوبت‌دهی.
+     *
+     * امروز عمداً بیرون است: صفِ امروز را سامانه می‌چیند و اجازه‌ی انتخاب
+     * ساعت در آن، یعنی راننده‌ای که جلوی صفِ امروز می‌زند.
+     */
+    private function assertRequestedDayIsAllowed(NewAppointment $data): void
+    {
+        $day = $data->preferredStart->startOfDay();
+        $today = CarbonImmutable::today();
+
+        if ($day->lessThanOrEqualTo($today)) {
+            throw BookingException::requestedDayTooSoon();
+        }
+
+        if ($day->greaterThan($today->addDays((int) $data->factory->booking_horizon_days))) {
+            throw BookingException::noOpening((int) $data->factory->booking_horizon_days);
+        }
+    }
+
     private function nextNumber(int $factoryId, mixed $date): int
     {
         $max = Appointment::where('factory_id', $factoryId)

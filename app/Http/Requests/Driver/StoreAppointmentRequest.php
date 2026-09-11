@@ -7,6 +7,7 @@ namespace App\Http\Requests\Driver;
 use App\Domain\Truck\PlateNumber;
 use App\Rules\NationalCode;
 use App\Support\Digits;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
@@ -29,16 +30,23 @@ class StoreAppointmentRequest extends FormRequest
     }
 
     /**
-     * ساعت نوبت عمداً اینجا نیست.
+     * ساعتِ دقیق نوبت اینجا نیست و نمی‌تواند باشد.
      *
-     * راننده انتخابش نمی‌کند و کسی هم نمی‌تواند در درخواست تحمیلش کند —
-     * زمان‌بند سمت سرور تعیینش می‌کند.
+     * راننده حداکثر یک *کف* می‌فرستد — «فلان روز، از فلان ساعت به بعد» —
+     * و زمان‌بند سمت سرور اولین جای خالی را از آنجا پیدا می‌کند. اگر ساعتِ
+     * قطعی از درخواست خوانده می‌شد، هر کسی می‌توانست نوبتی روی لاینِ اشغال
+     * بنشاند.
+     *
+     * روز هم فقط از فردا: امروز مالِ صف است.
      */
     public function rules(): array
     {
         return [
             'driver_name' => ['required', 'string', 'min:3', 'max:120'],
-            'national_code' => ['required', 'string', new NationalCode()],
+            // خالی یعنی «زودترین ممکن» — همان رفتار همیشگی
+            'preferred_date' => ['nullable', 'date_format:Y-m-d', 'after:today'],
+            'preferred_time' => ['nullable', 'required_with:preferred_date', 'date_format:H:i'],
+            'national_code' => ['required', 'string', new NationalCode],
             'plate_two' => ['required', 'digits:2'],
             'plate_letter' => ['required', 'string', Rule::in(PlateNumber::LETTERS)],
             'plate_three' => ['required', 'digits:3'],
@@ -64,9 +72,30 @@ class StoreAppointmentRequest extends FormRequest
         ];
     }
 
+    /**
+     * روز و ساعتی که راننده خواسته — یا null یعنی «زودترین ممکن».
+     *
+     * دو فیلد جدا در فرم‌اند چون انتخابگرشان جداست، ولی برای دامنه یک لحظه‌اند.
+     */
+    public function preferredStart(): ?CarbonImmutable
+    {
+        $date = $this->string('preferred_date')->trim()->toString();
+        $time = $this->string('preferred_time')->trim()->toString();
+
+        if ($date === '' || $time === '') {
+            return null;
+        }
+
+        return CarbonImmutable::parse($date.' '.$time);
+    }
+
     public function messages(): array
     {
         return [
+            'preferred_date.after' => 'انتخاب روز از فردا به بعد ممکن است.',
+            'preferred_date.date_format' => 'روز انتخاب‌شده معتبر نیست.',
+            'preferred_time.required_with' => 'ساعت را هم انتخاب کنید.',
+            'preferred_time.date_format' => 'ساعت انتخاب‌شده معتبر نیست.',
             'driver_name.required' => 'نام و نام خانوادگی راننده را وارد کنید.',
             'driver_name.min' => 'نام راننده خیلی کوتاه است.',
             'national_code.required' => 'کد ملی راننده را وارد کنید.',

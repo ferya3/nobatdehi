@@ -29,6 +29,18 @@ final class Jalali
         return self::of($date)->format('l j F');
     }
 
+    /** شنبه */
+    public static function weekday(DateTimeInterface|string $date): string
+    {
+        return self::of($date)->format('l');
+    }
+
+    /** ۱۶ شهریور */
+    public static function dayMonth(DateTimeInterface|string $date): string
+    {
+        return self::of($date)->format('j F');
+    }
+
     /** ۱۶ شهریور ۱۴۰۵ */
     public static function long(DateTimeInterface|string $date): string
     {
