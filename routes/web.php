@@ -7,6 +7,7 @@ use App\Http\Controllers\Staff\Catalog\ProductController;
 use App\Http\Controllers\Staff\Catalog\TruckTypeController;
 use App\Http\Controllers\Staff\ConsoleController;
 use App\Http\Controllers\Staff\DashboardController;
+use App\Http\Controllers\Staff\ExitPermitController;
 use App\Http\Controllers\Staff\DeviceSettingsController;
 use App\Http\Controllers\Staff\GateController;
 use App\Http\Controllers\Staff\HomeController;
@@ -122,6 +123,10 @@ Route::prefix('panel')->name('staff.')->group(function () {
 
         Route::get('/queue', [QueueController::class, 'index'])->name('queue.index');
         Route::get('/queue/{appointment}', [QueueController::class, 'show'])->name('queue.show');
+
+        // برگه‌ی خروج — کاغذی که راننده دمِ راهبند نشان می‌دهد
+        Route::get('/queue/{appointment}/exit-permit', [ExitPermitController::class, 'show'])
+            ->name('queue.exit-permit');
 
         // تعیین تکلیفِ توزینِ مغایر — کارِ مدیریت، نه باسکول‌بان
         Route::post('/queue/{appointment}/weight-discrepancy', [WeightDiscrepancyController::class, 'store'])

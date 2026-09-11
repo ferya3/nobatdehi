@@ -129,9 +129,17 @@ const weight = useForm({ stage: '', weight_kg: '', console: 1 });
 const move = useForm({ to: '', loading_point_id: null as number | null, console: 1 });
 const verdict = useForm({ decision: '', reason: '', console: 1 });
 
-// کامیون که عوض شد، عددهای نیمه‌کاره‌ی قبلی نباید بمانند
+/**
+ * فرم‌ها بین دو قدم پاک می‌شوند، نه فقط بین دو کامیون.
+ *
+ * کنسول همان صفحه می‌ماند و کامپوننت دوباره ساخته نمی‌شود، پس عددی که در
+ * «توزین خالی» تایپ شده بود تا «توزین پر» زنده می‌ماند. اپراتور به باسکول
+ * دوم می‌رسید و وزن خالی از قبل در جعبه نشسته بود: اگر همان را ثبت می‌کرد
+ * سرور ردش می‌کرد («پر از خالی بیشتر نیست») و اگر رویش تایپ می‌کرد، عددی
+ * می‌ساخت که هیچ باسکولی نگفته بود.
+ */
 watch(
-    () => props.selected?.ulid,
+    () => `${props.selected?.ulid ?? ''}:${props.selected?.next ?? ''}`,
     () => {
         checkIn.reset();
         weight.reset();
@@ -332,12 +340,20 @@ const TILES = [
                         </div>
                     </dl>
 
-                    <p
+                    <div
                         v-if="selected.weighing?.exit_permit_number"
-                        class="rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-medium text-emerald-900"
+                        class="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-medium text-emerald-900"
                     >
-                        برگه خروج <span class="num">{{ selected.weighing.exit_permit_number }}</span>
-                    </p>
+                        <span>برگه خروج <span class="num">{{ selected.weighing.exit_permit_number }}</span></span>
+
+                        <a
+                            :href="route('staff.queue.exit-permit', selected.ulid)"
+                            target="_blank"
+                            class="rounded-lg border border-emerald-300 bg-white px-2.5 py-1 text-xs transition hover:bg-emerald-100"
+                        >
+                            چاپ برگه
+                        </a>
+                    </div>
 
                     <!-- کارِ بعدی -->
                     <div v-if="selected.next && selected.mine" class="space-y-3 border-t border-slate-100 pt-4">

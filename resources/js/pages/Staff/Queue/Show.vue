@@ -248,12 +248,22 @@ function decide(value: 'approved' | 'rejected') {
                         </div>
                     </dl>
 
-                    <p
+                    <div
                         v-if="appointment.weighing.exit_permit_number"
-                        class="rounded-xl bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-900"
+                        class="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-900"
                     >
-                        برگه خروج <span class="num">{{ appointment.weighing.exit_permit_number }}</span> صادر شد.
-                    </p>
+                        <span>
+                            برگه خروج <span class="num">{{ appointment.weighing.exit_permit_number }}</span> صادر شد.
+                        </span>
+
+                        <a
+                            :href="route('staff.queue.exit-permit', appointment.ulid)"
+                            target="_blank"
+                            class="rounded-lg border border-emerald-300 bg-white px-3 py-1.5 text-xs transition hover:bg-emerald-100"
+                        >
+                            چاپ برگه
+                        </a>
+                    </div>
 
                     <template v-else-if="appointment.weighing.discrepancy">
                         <p class="rounded-xl bg-rose-50 px-4 py-3 text-sm font-medium text-rose-900">
