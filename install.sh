@@ -858,12 +858,15 @@ ${BOLD}${GREEN}نصب تمام شد.${RESET}
 
   آدرس راننده     ${APP_URL}/queue
   آدرس کارکنان    ${APP_URL}/panel
+  کنسول محوطه     ${APP_URL}/panel/console
 
   ${BOLD}کاربران پیش‌فرض${RESET}
   admin@example.test      مدیر ارشد سامانه
   manager@example.test    مدیر کارخانه
-  operator@example.test   اپراتور
+  operator@example.test   اپراتور صف
   gate@example.test       نگهبانی
+  scale@example.test      باسکول
+  warehouse@example.test  انبار و لاین بارگیری
   ceo@example.test        مدیرعامل
 
   رمز هر کدام هنگام نصب به‌طور تصادفی ساخته شد:
@@ -881,8 +884,12 @@ ${BOLD}${GREEN}نصب تمام شد.${RESET}
      (نام کاربری، رمز و شماره اختصاصی پنل + شماره مدیران)
      همان‌جا دکمه‌ی «ارسال آزمایشی» و «عیب‌یابی هوشمند» هم هست.
      تا وقتی تنظیم نشده، پیامکی ارسال نمی‌شود.
-  2) بعد از هر تغییر .env:  sudo -u ${APP_USER} ${PHP_BIN} ${APP_DIR}/artisan config:cache
-  3) پشتیبان‌گیری دیتابیس را تنظیم کنید — رمز دیتابیس در ${DB_PASSWORD_FILE}
+  2) ظرفیت انواع کامیون را چک کنید — همین عدد سقفِ اضافه‌بار است:
+     ${APP_URL}/panel/truck-types
+  3) ساعات کاری و قواعد نوبت‌دهی:
+     ${APP_URL}/panel/settings
+  4) بعد از هر تغییر .env:  sudo -u ${APP_USER} ${PHP_BIN} ${APP_DIR}/artisan config:cache
+  5) پشتیبان‌گیری دیتابیس را تنظیم کنید — رمز دیتابیس در ${DB_PASSWORD_FILE}
 
   ${BOLD}سرویس‌ها${RESET}
   systemctl status nobatdehi-reverb nobatdehi-horizon
